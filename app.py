@@ -38,4 +38,45 @@ with tab2:
     )
 
 with tab3:
-    st.info("About — coming soon")
+    st.header("About This Project")
+    
+    st.write("""
+    **Student Placement Predictor** is a machine learning web app that predicts 
+    whether a student is likely to get placed based on their academic performance, 
+    skills, and background. It also provides a personalized profile analysis 
+    showing exactly where you stand and what to improve.
+    """)
+    
+    st.divider()
+    
+    st.subheader("✨ Features")
+    st.write("""
+    - Placement prediction with confidence percentage
+    - Personalized profile analysis dashboard
+    - Comparison against average placed student
+    - Actionable improvement tips per feature
+    - Trained on 10,000 student records
+    """)
+    
+    st.divider()
+    
+    st.subheader("🛠️ Tech Stack")
+    st.write("Python · scikit-learn · XGBoost · Streamlit · pandas · plotly · joblib")
+    
+    st.divider()
+    
+    st.subheader("👨‍💻 Contributors")
+    st.markdown("""
+    | Name | Role | GitHub |
+    |------|------|--------|
+    | Aditya | ML Model + Profile Analysis | [@Adityabt](https://github.com/Adityabt) |
+    | Jiya | Data Cleaning + Prediction UI | [@jiyagithub](https://github.com/jiyagithub) |
+    """)
+    
+    st.divider()
+    
+    st.subheader("🔗 Links")
+    st.markdown("""
+    - [GitHub Repository](https://github.com/Adityabt/student-placement-predictor)
+    - Live Demo — coming soon after deployment
+    """)
