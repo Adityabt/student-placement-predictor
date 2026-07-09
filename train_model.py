@@ -1,5 +1,6 @@
 import pandas as pd
 import joblib
+from feature_engineering import engineer_features
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
@@ -10,6 +11,7 @@ from sklearn.pipeline import Pipeline
 
 # ── Load Data ──────────────────────────────────────────────
 df = pd.read_csv('placement_clean.csv')
+df = engineer_features(df)
 
 # Drop CompanyTier — data leakage (only exists for placed students)
 X = df.drop(['PlacementStatus', 'CompanyTier', 'InterviewRoundsCleared'], axis=1)
