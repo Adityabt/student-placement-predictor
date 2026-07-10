@@ -3,12 +3,16 @@ from xgboost import XGBClassifier
 from sklearn.model_selection import cross_val_score
 import pandas as pd
 import joblib
+import shap
 from feature_engineering import engineer_features
 
 df = pd.read_csv('placement_clean.csv')
 df = engineer_features(df)
 
-X = df.drop(['PlacementStatus', 'InterviewRoundsCleared', 'CompanyTier'], axis=1)
+X = df.drop(['PlacementStatus', 'InterviewRoundsCleared', 'CompanyTier',
+             'SSC_Marks', 'HSC_Marks', 'CGPA',
+             'TechnicalSkillScore', 'CodingPlatformScore', 'GitHubScore', 'AptitudeTestScore',
+             'Internships', 'Projects', 'Workshops/Certifications'], axis=1)
 y = df['PlacementStatus']
 
 def objective(trial):
@@ -33,3 +37,8 @@ best_model.fit(X, y)
 joblib.dump(best_model, 'model.pkl')
 joblib.dump(best_model.feature_importances_, 'feature_importance.pkl')
 print("model.pkl and feature_importance.pkl saved")
+
+# ── SHAP Explainer ──────────────────────────────────────────
+explainer = shap.TreeExplainer(best_model)
+joblib.dump(explainer, 'shap_explainer.pkl')
+print("shap_explainer.pkl saved")

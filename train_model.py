@@ -1,4 +1,5 @@
 import pandas as pd
+import shap
 import joblib
 from feature_engineering import engineer_features
 from sklearn.model_selection import train_test_split
@@ -14,7 +15,12 @@ df = pd.read_csv('placement_clean.csv')
 df = engineer_features(df)
 
 # Drop CompanyTier — data leakage (only exists for placed students)
-X = df.drop(['PlacementStatus', 'InterviewRoundsCleared', 'CompanyTier'], axis=1)
+# Also drop raw source columns already folded into academic_score,
+# employability_score, and practical_exposure (avoids multicollinearity)
+X = df.drop(['PlacementStatus', 'InterviewRoundsCleared', 'CompanyTier',
+             'SSC_Marks', 'HSC_Marks', 'CGPA',
+             'TechnicalSkillScore', 'CodingPlatformScore', 'GitHubScore', 'AptitudeTestScore',
+             'Internships', 'Projects', 'Workshops/Certifications'], axis=1)
 y = df['PlacementStatus']
 
 print("Features used:", X.columns.tolist())
@@ -29,7 +35,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 models = {
     'Logistic Regression': Pipeline([
         ('scaler', StandardScaler()),
-        ('model', LogisticRegression(max_iter=1000))
+        ('model', LogisticRegression(max_iter=1000, solver='newton-cg'))
     ]),
     'Random Forest': RandomForestClassifier(n_estimators=100, random_state=42),
     'XGBoost': XGBClassifier(eval_metric='logloss', random_state=42)
@@ -59,5 +65,5 @@ best_model = models[best_model_name]
 
 print(f"\n✅ Best Model: {best_model_name} ({results_df.loc[best_model_name, 'Accuracy']}% accuracy)")
 
-joblib.dump(best_model, 'model.pkl')
-print("💾 model.pkl saved successfully")
+joblib.dump(best_model, 'baseline_model.pkl')
+print("💾 baseline_model.pkl saved successfully — for comparison table only, NOT used in the app")
