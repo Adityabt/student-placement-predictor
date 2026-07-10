@@ -14,7 +14,7 @@ df = pd.read_csv('placement_clean.csv')
 df = engineer_features(df)
 
 # Drop CompanyTier — data leakage (only exists for placed students)
-X = df.drop(['PlacementStatus', 'CompanyTier', 'InterviewRoundsCleared'], axis=1)
+X = df.drop(['PlacementStatus', 'InterviewRoundsCleared', 'CompanyTier'], axis=1)
 y = df['PlacementStatus']
 
 print("Features used:", X.columns.tolist())
