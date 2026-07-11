@@ -1,5 +1,4 @@
 import pandas as pd
-import shap
 import joblib
 from feature_engineering import engineer_features
 from sklearn.model_selection import train_test_split
