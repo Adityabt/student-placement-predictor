@@ -1,23 +1,20 @@
-import { useState } from "react"
+import { BrowserRouter, Routes, Route } from "react-router-dom"
 import Navbar from "./components/Navbar"
-import HeroSection from "./components/HeroSection"
-import PredictForm from "./components/PredictForm"
-import ResultCard from "./components/ResultCard"
-import AnalysisSection from "./components/AnalysisSection"
 import Footer from "./components/Footer"
+import Home from "./pages/Home"
+import About from "./pages/About"
 
 export default function App() {
-  const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <Navbar />
-      <HeroSection />
-      <PredictForm setResult={setResult} setLoading={setLoading} loading={loading} />
-      {result && <ResultCard result={result} />}
-      {result && <AnalysisSection result={result} />}
-      <Footer />
-    </div>
+    <BrowserRouter>
+      <div className="min-h-screen text-white bg-gray-950">
+        <Navbar />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+        </Routes>
+        <Footer />
+      </div>
+    </BrowserRouter>
   )
 }
