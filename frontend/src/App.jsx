@@ -3,6 +3,7 @@ import Navbar from "./components/Navbar"
 import Footer from "./components/Footer"
 import Home from "./pages/Home"
 import About from "./pages/About"
+import Predict from "./pages/Predict"
 import Analysis from "./pages/Analysis"
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
+          <Route path="/predict" element={<Predict />} />
           <Route path="/analysis" element={<Analysis />} />
         </Routes>
         <Footer />
