@@ -1,9 +1,9 @@
-import Analysis from "../components/AnalysisSection";
+import AnalysisSection from "../components/AnalysisSection";
 
-export default function AnalysisPage() {
-  return (
-    <div className="min-h-screen pt-24">
-      <Analysis />
-    </div>
-  )
-}
+export default function Analysis() {
+    return (
+      <>
+        <AnalysisSection />
+      </>
+    )
+  }
