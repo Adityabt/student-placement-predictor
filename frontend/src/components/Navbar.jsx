@@ -26,7 +26,7 @@ export default function Navbar() {
         initial={{ y: -70, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-        className="relative flex items-center gap-1 px-2 py-2 rounded-2xl"
+        className="relative flex items-center gap-1 px-2 py-2 rounded-3xl"
         style={{
           background: scrolled
             ? "rgba(10, 6, 25, 0.82)"
@@ -40,7 +40,7 @@ export default function Navbar() {
         }}
       >
         <div
-          className="absolute inset-0 pointer-events-none rounded-2xl"
+          className="absolute inset-0 pointer-events-none rounded-3xl"
           style={{
             background: "linear-gradient(135deg, rgba(139,92,246,0.07) 0%, transparent 60%)",
           }}
@@ -71,7 +71,7 @@ export default function Navbar() {
               >
                 <Link
                   to={to}
-                  className="relative px-4 py-1.5 rounded-xl text-sm font-medium transition-colors duration-200 block"
+                  className="relative px-4 py-1.5 rounded-3xl text-sm font-medium transition-colors duration-200 block"
                   style={{
                     color: isActive
                       ? "rgba(255,255,255,1)"
@@ -81,7 +81,7 @@ export default function Navbar() {
                   {isActive && (
                     <motion.span
                       layoutId="activePill"
-                      className="absolute inset-0 rounded-xl"
+                      className="absolute inset-0 rounded-3xl"
                       transition={{ type: "spring", stiffness: 420, damping: 36 }}
                       style={{
                         background: "linear-gradient(135deg, rgba(139,92,246,0.30), rgba(236,72,153,0.18))",
