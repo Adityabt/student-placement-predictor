@@ -18,10 +18,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Granular raw features feed the model now — composites are computed
+# separately below, purely for the UI's display cards.
 FEATURE_COLS = [
-    'Gender', 'Branch', 'Backlogs', 'SoftSkillsRating',
-    'ExtracurricularActivities', 'PlacementTraining',
-    'academic_score', 'employability_score', 'practical_exposure'
+    'Gender', 'Branch', 'Backlogs', 'SSC_Marks', 'HSC_Marks', 'CGPA',
+    'Internships', 'Projects', 'Workshops/Certifications',
+    'TechnicalSkillScore', 'CodingPlatformScore', 'GitHubScore',
+    'AptitudeTestScore', 'SoftSkillsRating', 'ExtracurricularActivities',
+    'PlacementTraining'
 ]
 
 BASE_DIR = os.path.dirname(__file__)
@@ -34,12 +38,19 @@ FEATURE_LABELS = {
     'Gender': 'Gender',
     'Branch': 'Branch',
     'Backlogs': 'Backlogs',
+    'SSC_Marks': '10th Percentage',
+    'HSC_Marks': '12th Percentage',
+    'CGPA': 'CGPA',
+    'Internships': 'Internships',
+    'Projects': 'Projects',
+    'Workshops/Certifications': 'Workshops & Certifications',
+    'TechnicalSkillScore': 'Technical Skill Score',
+    'CodingPlatformScore': 'Coding Platform Score',
+    'GitHubScore': 'GitHub Activity',
+    'AptitudeTestScore': 'Aptitude Test Score',
     'SoftSkillsRating': 'Soft Skills',
     'ExtracurricularActivities': 'Extracurricular Activities',
     'PlacementTraining': 'Placement Training',
-    'academic_score': 'Academic Score',
-    'employability_score': 'Employability Score',
-    'practical_exposure': 'Practical Exposure',
 }
 
 CGPA_BINS = [0, 6, 7, 8, 9, 10.01]
@@ -94,6 +105,8 @@ def predict(data: StudentInput):
         'PlacementTraining': data.placement_training,
     }])
 
+    # Still computed for the UI's gauge/chart components — no longer
+    # what the model actually predicts on.
     engineered_df = engineer_features(raw_df)
     input_data = engineered_df[FEATURE_COLS]
 

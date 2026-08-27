@@ -7,8 +7,10 @@ import {
   useScroll,
   useSpring,
   useReducedMotion,
+  AnimatePresence,
 } from "framer-motion";
 import axios from "axios";
+import { Link } from "react-router-dom";
 import {
   FiZap,
   FiTrendingUp,
@@ -19,6 +21,9 @@ import {
   FiAlertTriangle,
   FiTarget,
   FiChevronDown,
+  FiX,
+  FiEye,
+  FiArrowRight,
 } from "react-icons/fi";
 import { FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 import GlowCard from "../components/GlowCard";
@@ -1660,12 +1665,90 @@ const headlineLines = [
   { text: "Intelligence", gradient: true },
 ];
 
-export default function AnalysisSection() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(false);
-  const storedResult = JSON.parse(
-    sessionStorage.getItem("predictionResult") || "null",
+/* ---------------------------------------------------------------------- */
+/*  New: modal wrapper, pre-prediction CTA, extracted dataset overview    */
+/* ---------------------------------------------------------------------- */
+
+function Modal({ onClose, children }) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto p-4 py-10 sm:py-16"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 16, scale: 0.98 }}
+        transition={{ duration: 0.25, ease: EASE }}
+        className="relative w-full max-w-6xl"
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between px-1 pb-4">
+          <p className="text-xs font-medium tracking-widest text-purple-400 uppercase">
+            How this analysis works
+          </p>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 text-gray-400 transition-colors border rounded-full border-white/10 bg-white/[0.04] hover:text-white hover:bg-white/[0.08]"
+            aria-label="Close"
+          >
+            <FiX size={15} />
+          </button>
+        </div>
+        {children}
+      </motion.div>
+    </motion.div>
   );
+}
+
+function PredictCTA() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="mb-6"
+    >
+      <TiltCard>
+        <GlowCard>
+          <div className="flex flex-col items-center gap-4 p-6 text-center sm:flex-row sm:justify-between sm:text-left md:p-8">
+            <div>
+              <p className="mb-1 text-xs font-medium tracking-widest text-purple-400 uppercase">
+                No prediction yet
+              </p>
+              <h2 className="text-lg font-semibold text-white sm:text-xl">
+                Get your personal placement prediction first
+              </h2>
+              <p className="max-w-md mt-2 text-xs leading-relaxed text-gray-500">
+                What you're seeing below is the dataset-wide analysis. Run
+                your own prediction to see a personalized breakdown built
+                around your profile.
+              </p>
+            </div>
+            <Link to="/predict" className="shrink-0">
+              <motion.span
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-semibold shadow-lg shadow-purple-500/20"
+              >
+                Go to Predict
+                <FiArrowRight size={13} />
+              </motion.span>
+            </Link>
+          </div>
+        </GlowCard>
+      </TiltCard>
+    </motion.div>
+  );
+}
+
+function DefaultAnalysisContent({ data }) {
   const sectionRef = useRef(null);
   const mx = useMotionValue(50);
   const my = useMotionValue(50);
@@ -1676,12 +1759,284 @@ export default function AnalysisSection() {
     my.set(((e.clientY - rect.top) / rect.height) * 100);
   };
 
+  const { dataset_summary, global_importance, branch_stats, cgpa_bands } = data;
+  const maxImportance = Math.max(...global_importance.map((f) => f.importance));
+  const insights = generateInsights(
+    dataset_summary,
+    global_importance,
+    branch_stats,
+    cgpa_bands,
+  );
+  const totalBranchCount = branch_stats.reduce((s, b) => s + b.count, 0);
+  const bestBranch = [...branch_stats].sort(
+    (a, b) => b.placement_rate - a.placement_rate,
+  )[0];
+  const rankedBranches = [...branch_stats].sort(
+    (a, b) => b.placement_rate - a.placement_rate,
+  );
+  const topPredictor = [...global_importance].sort(
+    (a, b) => b.importance - a.importance,
+  )[0];
+  const topCgpaBand = cgpa_bands[cgpa_bands.length - 1];
+  const footerInsight = insights[1]?.text ?? insights[0]?.text;
+
+  return (
+    <>
+      <div
+        id="overview"
+        ref={sectionRef}
+        onMouseMove={handleMouseMove}
+        className="relative"
+      >
+        <motion.div
+          className="absolute inset-0 pointer-events-none -z-10"
+          style={{ background: spotlight }}
+        />
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-6 text-center"
+        >
+          <p className="mb-2 text-xs font-medium tracking-widest text-purple-400 uppercase">
+            Analysis
+          </p>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight leading-[1.15]">
+            {headlineLines.map((line, i) => (
+              <motion.span
+                key={line.text}
+                initial={{ clipPath: "inset(0 100% 0 0)" }}
+                animate={{ clipPath: "inset(0 0% 0 0)" }}
+                transition={{
+                  delay: 0.1 + i * 0.15,
+                  duration: 0.5,
+                  ease: EASE,
+                }}
+                className={
+                  line.gradient
+                    ? "inline-block py-1 ml-2 text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text"
+                    : "inline-block text-white"
+                }
+              >
+                {line.text}
+              </motion.span>
+            ))}
+          </h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4, duration: 0.4 }}
+            className="max-w-md mx-auto mt-3 text-xs leading-relaxed text-gray-500"
+          >
+            Benchmarked against{" "}
+            {dataset_summary.total_students.toLocaleString()} real student
+            outcomes.
+          </motion.p>
+          <motion.div
+            className="flex justify-center mt-6"
+            animate={{ y: [0, 8, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <FiChevronDown className="text-gray-600" size={18} />
+          </motion.div>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="mb-4"
+        >
+          <TiltCard>
+            <GlowCard>
+              <div className="flex flex-col sm:flex-row">
+                <div className="flex items-center justify-center p-5 sm:w-50 sm:p-6 shrink-0">
+                  <RadialGauge value={dataset_summary.placement_rate} />
+                </div>
+                <div className="flex-1 min-w-0 border-t sm:border-t-0 sm:border-l border-white/10">
+                  <div className="grid grid-cols-2 p-5 gap-x-8 gap-y-4 sm:grid-cols-3 sm:p-6">
+                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                      <div className="mt-5 text-xl font-semibold text-white">
+                        <AnimatedStat value={dataset_summary.total_students} />
+                      </div>
+                      <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
+                        Students
+                      </div>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                      <div className="mt-5 text-xl font-semibold text-white">
+                        <AnimatedStat value={dataset_summary.avg_cgpa} decimals={2} />
+                      </div>
+                      <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
+                        Avg CGPA
+                      </div>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                      <div className="mt-5 text-xl font-semibold text-white truncate">
+                        {bestBranch.branch}
+                      </div>
+                      <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
+                        Top branch
+                      </div>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                      <div className="text-xl font-semibold text-white tabular-nums">
+                        {fmtPct(bestBranch.placement_rate)}%
+                      </div>
+                      <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
+                        Top rate
+                      </div>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }} className="col-span-2 sm:col-span-1">
+                      <div className="text-xl font-semibold leading-snug text-white ">
+                        {topPredictor.feature}
+                      </div>
+                      <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
+                        Top predictor
+                      </div>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                      <div className="text-xl font-semibold text-white tabular-nums">
+                        {fmtPct(topCgpaBand.placement_rate)}%
+                      </div>
+                      <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
+                        Top CGPA band
+                      </div>
+                    </motion.div>
+                  </div>
+                </div>
+              </div>
+              {footerInsight && (
+                <div className="flex items-start gap-2 px-5 pt-3 pb-4 border-t sm:px-6 border-white/5">
+                  <FiZap className="mt-0.5 text-purple-400 shrink-0" size={12} />
+                  <p className="text-xs leading-relaxed text-gray-400">{footerInsight}</p>
+                </div>
+              )}
+            </GlowCard>
+          </TiltCard>
+        </motion.div>
+      </div>
+
+      <div id="importance" className="grid items-stretch gap-4 mb-4 md:grid-cols-2">
+        <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
+          <TiltCard>
+            <GlowCard>
+              <div className="p-4 md:p-5">
+                <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase">
+                  What matters most
+                </h2>
+                <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger(0.05)}>
+                  {global_importance.slice(0, 5).map((f, i) => (
+                    <Bar key={f.feature} label={f.feature} value={f.importance} max={maxImportance} i={i} />
+                  ))}
+                </motion.div>
+              </div>
+            </GlowCard>
+          </TiltCard>
+        </motion.div>
+        <motion.div id="branches" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.05 }}>
+          <TiltCard>
+            <GlowCard>
+              <div className="p-4 md:p-5">
+                <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase h-fit">
+                  Branch composition
+                </h2>
+                <div className="flex items-center gap-6">
+                  <DonutChart branches={branch_stats} />
+                  <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger(0.04)} className="flex-1 min-w-0 space-y-3">
+                    {branch_stats.map((b, i) => (
+                      <BranchChip key={b.branch} branch={b.branch} count={b.count} total={totalBranchCount} color={DONUT_COLORS[i % DONUT_COLORS.length]} i={i} />
+                    ))}
+                  </motion.div>
+                </div>
+              </div>
+            </GlowCard>
+          </TiltCard>
+        </motion.div>
+      </div>
+
+      <div className="grid gap-4 mb-4 md:grid-cols-2">
+        <motion.div id="rates" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
+          <TiltCard>
+            <GlowCard>
+              <div className="p-4 md:p-5">
+                <h2 className="mb-1 text-xs font-semibold tracking-wide text-white uppercase">
+                  Placement by branch
+                </h2>
+                <p className="mb-3 text-[11px] text-gray-500">Ranked by outcome rate</p>
+                <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger(0.04)}>
+                  {rankedBranches.map((b, i) => (
+                    <PlacementChip key={b.branch} branch={b.branch} placement_rate={b.placement_rate} i={i} />
+                  ))}
+                </motion.div>
+              </div>
+            </GlowCard>
+          </TiltCard>
+        </motion.div>
+        <motion.div id="cgpa" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.05 }}>
+          <TiltCard>
+            <GlowCard>
+              <div className="p-4 md:p-5">
+                <h2 className="mb-1 text-xs font-semibold tracking-wide text-white uppercase">
+                  CGPA vs placement
+                </h2>
+                <p className="mb-5 text-[11px] text-gray-500">
+                  Placement likelihood climbs steadily as CGPA increases.
+                </p>
+                <Sparkline bands={cgpa_bands} />
+              </div>
+            </GlowCard>
+          </TiltCard>
+        </motion.div>
+      </div>
+
+      <motion.div id="insights" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="mb-4">
+        <TiltCard>
+          <GlowCard>
+            <div className="p-4 md:p-5">
+              <h2 className="mb-4 text-xs font-semibold tracking-wide text-white uppercase">
+                Key insights
+              </h2>
+              <InsightsList insights={insights} />
+            </div>
+          </GlowCard>
+        </TiltCard>
+      </motion.div>
+    </>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Page entry point                                                      */
+/* ---------------------------------------------------------------------- */
+
+export default function AnalysisSection() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const storedResult = JSON.parse(
+    sessionStorage.getItem("predictionResult") || "null",
+  );
+
   useEffect(() => {
     axios
       .get(`${API}/analysis`)
       .then((res) => setData(res.data))
       .catch(() => setError(true));
   }, []);
+
+  useEffect(() => {
+    if (!showAnalysisModal) return;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => {
+      if (e.key === "Escape") setShowAnalysisModal(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [showAnalysisModal]);
 
   if (error) {
     return (
@@ -1707,361 +2062,43 @@ export default function AnalysisSection() {
     );
   }
 
-  const { dataset_summary, global_importance, branch_stats, cgpa_bands } = data;
-  const maxImportance = Math.max(...global_importance.map((f) => f.importance));
-  const insights = generateInsights(
-    dataset_summary,
-    global_importance,
-    branch_stats,
-    cgpa_bands,
-  );
-  const totalBranchCount = branch_stats.reduce((s, b) => s + b.count, 0);
-  const bestBranch = [...branch_stats].sort(
-    (a, b) => b.placement_rate - a.placement_rate,
-  )[0];
-  const rankedBranches = [...branch_stats].sort(
-    (a, b) => b.placement_rate - a.placement_rate,
-  );
-  const topPredictor = [...global_importance].sort(
-    (a, b) => b.importance - a.importance,
-  )[0];
-  const topCgpaBand = cgpa_bands[cgpa_bands.length - 1];
-  const footerInsight = insights[1]?.text ?? insights[0]?.text;
-
   return (
     <div className="relative min-h-screen px-6 pb-20 pt-28">
       <AmbientBackground />
       <ScrollProgressBar />
 
       <div className="max-w-6xl mx-auto">
-        {storedResult && (
+        {storedResult ? (
           <div className="pt-6">
             <YourResult result={storedResult} data={data} />
+            <div className="flex justify-center mb-10">
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setShowAnalysisModal(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/10 bg-white/[0.03] text-xs font-medium text-gray-300 hover:text-white hover:border-purple-500/30 hover:bg-white/[0.06] transition-colors"
+              >
+                <FiEye size={13} />
+                See how this analysis works
+              </motion.button>
+            </div>
+          </div>
+        ) : (
+          <div className="pt-6">
+            <PredictCTA />
             <SectionDivider label="Dataset Overview" />
+            <DefaultAnalysisContent data={data} />
           </div>
         )}
-        <div
-          id="overview"
-          ref={sectionRef}
-          onMouseMove={handleMouseMove}
-          className="relative"
-        >
-          <motion.div
-            className="absolute inset-0 pointer-events-none -z-10"
-            style={{ background: spotlight }}
-          />
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mb-6 text-center"
-          >
-            <p className="mb-2 text-xs font-medium tracking-widest text-purple-400 uppercase">
-              Analysis
-            </p>
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight leading-[1.15]">
-              {headlineLines.map((line, i) => (
-                <motion.span
-                  key={line.text}
-                  initial={{ clipPath: "inset(0 100% 0 0)" }}
-                  animate={{ clipPath: "inset(0 0% 0 0)" }}
-                  transition={{
-                    delay: 0.1 + i * 0.15,
-                    duration: 0.5,
-                    ease: EASE,
-                  }}
-                  className={
-                    line.gradient
-                      ? "inline-block py-1 ml-2 text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text"
-                      : "inline-block text-white"
-                  }
-                >
-                  {line.text}
-                </motion.span>
-              ))}
-            </h1>
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.4 }}
-              className="max-w-md mx-auto mt-3 text-xs leading-relaxed text-gray-500"
-            >
-              Benchmarked against{" "}
-              {dataset_summary.total_students.toLocaleString()} real student
-              outcomes.
-            </motion.p>
-            {!storedResult && (
-              <motion.div
-                className="flex justify-center mt-6"
-                animate={{ y: [0, 8, 0] }}
-                transition={{
-                  duration: 1.8,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              >
-                <FiChevronDown className="text-gray-600" size={18} />
-              </motion.div>
-            )}
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="mb-4"
-          >
-            <TiltCard>
-              <GlowCard>
-                <div className="flex flex-col sm:flex-row">
-                  <div className="flex items-center justify-center p-5 sm:w-50 sm:p-6 shrink-0">
-                    <RadialGauge value={dataset_summary.placement_rate} />
-                  </div>
-                  <div className="flex-1 min-w-0 border-t sm:border-t-0 sm:border-l border-white/10">
-                    <div className="grid grid-cols-2 p-5 gap-x-8 gap-y-4 sm:grid-cols-3 sm:p-6">
-                      <motion.div
-                        whileHover={{ scale: 1.04 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <div className="mt-5 text-xl font-semibold text-white">
-                          <AnimatedStat
-                            value={dataset_summary.total_students}
-                          />
-                        </div>
-                        <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
-                          Students
-                        </div>
-                      </motion.div>
-                      <motion.div
-                        whileHover={{ scale: 1.04 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <div className="mt-5 text-xl font-semibold text-white">
-                          <AnimatedStat
-                            value={dataset_summary.avg_cgpa}
-                            decimals={2}
-                          />
-                        </div>
-                        <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
-                          Avg CGPA
-                        </div>
-                      </motion.div>
-                      <motion.div
-                        whileHover={{ scale: 1.04 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <div className="mt-5 text-xl font-semibold text-white truncate">
-                          {bestBranch.branch}
-                        </div>
-                        <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
-                          Top branch
-                        </div>
-                      </motion.div>
-                      <motion.div
-                        whileHover={{ scale: 1.04 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <div className="text-xl font-semibold text-white tabular-nums">
-                          {fmtPct(bestBranch.placement_rate)}%
-                        </div>
-                        <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
-                          Top rate
-                        </div>
-                      </motion.div>
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        transition={{ duration: 0.2 }}
-                        className="col-span-2 sm:col-span-1"
-                      >
-                        <div className="text-xl font-semibold leading-snug text-white ">
-                          {topPredictor.feature}
-                        </div>
-                        <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
-                          Top predictor
-                        </div>
-                      </motion.div>
-                      <motion.div
-                        whileHover={{ scale: 1.04 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <div className="text-xl font-semibold text-white tabular-nums">
-                          {fmtPct(topCgpaBand.placement_rate)}%
-                        </div>
-                        <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
-                          Top CGPA band
-                        </div>
-                      </motion.div>
-                    </div>
-                  </div>
-                </div>
-                {footerInsight && (
-                  <div className="flex items-start gap-2 px-5 pt-3 pb-4 border-t sm:px-6 border-white/5">
-                    <FiZap
-                      className="mt-0.5 text-purple-400 shrink-0"
-                      size={12}
-                    />
-                    <p className="text-xs leading-relaxed text-gray-400">
-                      {footerInsight}
-                    </p>
-                  </div>
-                )}
-              </GlowCard>
-            </TiltCard>
-          </motion.div>
-        </div>
-        <div
-          id="importance"
-          className="grid items-stretch gap-4 mb-4 md:grid-cols-2"
-        >
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-          >
-            <TiltCard>
-              <GlowCard>
-                <div className="p-4 md:p-5">
-                  <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase">
-                    What matters most
-                  </h2>
-                  <motion.div
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true, amount: 0.2 }}
-                    variants={stagger(0.05)}
-                  >
-                    {global_importance.slice(0, 5).map((f, i) => (
-                      <Bar
-                        key={f.feature}
-                        label={f.feature}
-                        value={f.importance}
-                        max={maxImportance}
-                        i={i}
-                      />
-                    ))}
-                  </motion.div>
-                </div>
-              </GlowCard>
-            </TiltCard>
-          </motion.div>
-          <motion.div
-            id="branches"
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.05 }}
-          >
-            <TiltCard>
-              <GlowCard>
-                <div className="p-4 md:p-5">
-                  <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase h-fit">
-                    Branch composition
-                  </h2>
-                  <div className="flex items-center gap-6">
-                    <DonutChart branches={branch_stats} />
-                    <motion.div
-                      initial="hidden"
-                      whileInView="visible"
-                      viewport={{ once: true, amount: 0.2 }}
-                      variants={stagger(0.04)}
-                      className="flex-1 min-w-0 space-y-3"
-                    >
-                      {branch_stats.map((b, i) => (
-                        <BranchChip
-                          key={b.branch}
-                          branch={b.branch}
-                          count={b.count}
-                          total={totalBranchCount}
-                          color={DONUT_COLORS[i % DONUT_COLORS.length]}
-                          i={i}
-                        />
-                      ))}
-                    </motion.div>
-                  </div>
-                </div>
-              </GlowCard>
-            </TiltCard>
-          </motion.div>
-        </div>
-        <div className="grid gap-4 mb-4 md:grid-cols-2">
-          <motion.div
-            id="rates"
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-          >
-            <TiltCard>
-              <GlowCard>
-                <div className="p-4 md:p-5">
-                  <h2 className="mb-1 text-xs font-semibold tracking-wide text-white uppercase">
-                    Placement by branch
-                  </h2>
-                  <p className="mb-3 text-[11px] text-gray-500">
-                    Ranked by outcome rate
-                  </p>
-                  <motion.div
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true, amount: 0.2 }}
-                    variants={stagger(0.04)}
-                  >
-                    {rankedBranches.map((b, i) => (
-                      <PlacementChip
-                        key={b.branch}
-                        branch={b.branch}
-                        placement_rate={b.placement_rate}
-                        i={i}
-                      />
-                    ))}
-                  </motion.div>
-                </div>
-              </GlowCard>
-            </TiltCard>
-          </motion.div>
-          <motion.div
-            id="cgpa"
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.05 }}
-          >
-            <TiltCard>
-              <GlowCard>
-                <div className="p-4 md:p-5">
-                  <h2 className="mb-1 text-xs font-semibold tracking-wide text-white uppercase">
-                    CGPA vs placement
-                  </h2>
-                  <p className="mb-5 text-[11px] text-gray-500">
-                    Placement likelihood climbs steadily as CGPA increases.
-                  </p>
-                  <Sparkline bands={cgpa_bands} />
-                </div>
-              </GlowCard>
-            </TiltCard>
-          </motion.div>
-        </div>
-        <motion.div
-          id="insights"
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="mb-4"
-        >
-          <TiltCard>
-            <GlowCard>
-              <div className="p-4 md:p-5">
-                <h2 className="mb-4 text-xs font-semibold tracking-wide text-white uppercase">
-                  Key insights
-                </h2>
-                <InsightsList insights={insights} />
-              </div>
-            </GlowCard>
-          </TiltCard>
-        </motion.div>
       </div>
+
+      <AnimatePresence>
+        {showAnalysisModal && (
+          <Modal onClose={() => setShowAnalysisModal(false)}>
+            <DefaultAnalysisContent data={data} />
+          </Modal>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
