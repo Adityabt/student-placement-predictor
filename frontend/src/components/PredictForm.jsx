@@ -24,7 +24,11 @@ const API = "http://localhost:8000";
 
 const EASE = [0.16, 1, 0.3, 1];
 
-const BRANCHES = ["CSE", "Civil", "ECE", "EEE", "IT", "Mechanical"];
+const BRANCHES = [
+  "CSE", "Civil", "ECE", "EEE", "IT", "Mechanical",
+  "AI & Data Science", "Cybersecurity", "Biotechnology",
+  "Chemical", "Aerospace", "Robotics & Automation",
+];
 
 const SPECIALIZATIONS = {
   CSE: [
@@ -63,6 +67,50 @@ const SPECIALIZATIONS = {
     "Thermal Engineering",
     "Manufacturing",
     "Robotics",
+    "Other",
+  ],
+  "AI & Data Science": [
+    "Machine Learning",
+    "Deep Learning",
+    "Data Engineering",
+    "Natural Language Processing",
+    "Computer Vision",
+    "Other",
+  ],
+  Cybersecurity: [
+    "Network Security",
+    "Ethical Hacking",
+    "Cloud Security",
+    "Digital Forensics",
+    "Security Operations",
+    "Other",
+  ],
+  Biotechnology: [
+    "Genetic Engineering",
+    "Bioinformatics",
+    "Pharmaceutical Biotechnology",
+    "Food Technology",
+    "Other",
+  ],
+  Chemical: [
+    "Process Engineering",
+    "Petrochemical Engineering",
+    "Polymer Technology",
+    "Environmental Engineering",
+    "Other",
+  ],
+  Aerospace: [
+    "Aerodynamics",
+    "Propulsion",
+    "Avionics",
+    "Structural Design",
+    "Other",
+  ],
+  "Robotics & Automation": [
+    "Industrial Automation",
+    "Robotic Process Automation",
+    "Embedded Robotics",
+    "Control Systems",
     "Other",
   ],
 };
@@ -240,6 +288,45 @@ const SOFT_SKILLS = [
   "Cultural Awareness",
 ];
 
+// Placement training providers/formats — chips shown only when the
+// toggle below is "Yes". Purely for display/insight purposes; the model
+// still only ever sees the Yes/No PlacementTraining field.
+const TRAINING_TYPES = [
+  "College TPO Cell",
+  "Coding Bootcamp",
+  "Mock Interviews",
+  "Group Discussion Practice",
+  "Resume Building Workshop",
+  "Soft Skills Workshop",
+  "Aptitude Training",
+  "Online Course (Udemy/Coursera)",
+  "Other",
+];
+
+// Preferred role/domain — now a REAL model input (PreferredRoleCategory),
+// not just a display extra. That means this list must be a closed set,
+// index-aligned with ROLE_CATEGORIES in add_synthetic_features.py and
+// PREFERRED_ROLE_NAMES in main.py — no "Other" free-text entry anymore,
+// since CatBoost was trained on exactly these 10 categories and an
+// unseen string can't be encoded into that.
+const PREFERRED_ROLES = [
+  "Software Development Engineer",
+  "Data Analyst",
+  "Data Scientist / ML Engineer",
+  "Frontend Developer",
+  "Backend Developer",
+  "Full Stack Developer",
+  "DevOps Engineer",
+  "QA / Test Engineer",
+  "Core Engineering (Non-IT)",
+  "Business Analyst",
+];
+
+// Index-aligned with training encoding (0=No, 1=Yes, 2=Flexible) — kept
+// in this exact order so `RELOCATE_OPTIONS.indexOf(form.relocate)` can be
+// sent straight to the model with no separate mapping step.
+const RELOCATE_OPTIONS = ["No", "Yes", "Flexible"];
+
 const labelClass =
   "block text-gray-500 text-[10px] font-medium mb-1.5 uppercase tracking-widest";
 
@@ -250,12 +337,12 @@ const selectClass = `${inputClass} appearance-none cursor-pointer`;
 
 // ---- Shared chrome (mirrors the Analysis page) ----
 
-function HoverCard({ children }) {
+function HoverCard({ children, className = "" }) {
   return (
     <motion.div
       whileHover={{ y: -3 }}
       transition={{ duration: 0.25, ease: EASE }}
-      className="transition-shadow duration-300 rounded-2xl hover:shadow-[0_8px_30px_rgba(168,85,247,0.12)]"
+      className={`transition-shadow duration-300 rounded-2xl hover:shadow-[0_8px_30px_rgba(168,85,247,0.12)] ${className}`}
     >
       {children}
     </motion.div>
@@ -343,9 +430,9 @@ function SegmentedToggle({ label, name, value, options, onChange }) {
     <div>
       <label className={labelClass}>{label}</label>
 
-      <div className="relative flex bg-gray-950/80 border border-white/10 rounded-lg p-1 gap-1 overflow-hidden">
+      <div className="relative flex gap-1 p-1 overflow-hidden border rounded-lg bg-gray-950/80 border-white/10">
         <motion.div
-  className="absolute top-1 bottom-1 rounded-md"
+  className="absolute rounded-md top-1 bottom-1"
   style={{
     background: "linear-gradient(135deg, #5b21b6 0%, #7e22ce 45%, #a3195b 100%)",
   }}
@@ -427,7 +514,7 @@ function TagPicker({ label, pool, selected, onAdd, onRemove, placeholder }) {
                   key={s}
                   type="button"
                   onClick={() => addSkill(s)}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-purple-500/10 hover:text-white transition-colors"
+                  className="w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-purple-500/10 hover:text-white"
                 >
                   {s}
                 </button>
@@ -455,7 +542,7 @@ function TagPicker({ label, pool, selected, onAdd, onRemove, placeholder }) {
               <button
                 type="button"
                 onClick={() => onRemove(s)}
-                className="text-purple-300 hover:text-white transition-colors"
+                className="text-purple-300 transition-colors hover:text-white"
               >
                 <FaTimes size={10} />
               </button>
@@ -467,7 +554,7 @@ function TagPicker({ label, pool, selected, onAdd, onRemove, placeholder }) {
   );
 }
 
-// Free-text addable chip list (certifications)
+
 
 function FreeTagList({ label, items, onAdd, onRemove, placeholder }) {
   const [draft, setDraft] = useState("");
@@ -505,7 +592,7 @@ function FreeTagList({ label, items, onAdd, onRemove, placeholder }) {
           whileTap={{ scale: 0.92 }}
           type="button"
           onClick={submit}
-          className="shrink-0 px-3 rounded-lg bg-purple-500/15 border border-purple-500/30 hover:bg-purple-500/25 text-purple-200 transition-colors"
+          className="px-3 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
         >
           <FaPlus size={12} />
         </motion.button>
@@ -529,13 +616,143 @@ function FreeTagList({ label, items, onAdd, onRemove, placeholder }) {
               <button
                 type="button"
                 onClick={() => onRemove(s)}
-                className="text-purple-300 hover:text-white transition-colors"
+                className="text-purple-300 transition-colors hover:text-white"
               >
                 <FaTimes size={10} />
               </button>
             </motion.span>
           ))}
         </motion.div>
+      )}
+    </div>
+  );
+}
+
+// Generic "add a specific entry, see a running list" builder — same idea
+// as the Internships/Training-programs sections, parameterized so
+// Projects, Workshops, and Extracurriculars can each collect the fields
+// that actually make sense for them instead of just a bare count.
+//
+// Duration sits on one compact line with the add button — but instead of
+// relying on a placeholder (which gets clipped to nothing in a narrow
+// box), it's labeled with plain fixed text ("Duration (months)") that
+// sits beside a small number input. Plain text doesn't truncate the way
+// placeholders inside bordered inputs do, so this stays both compact
+// (no wasted full-width row for a 1–3 digit number) and unambiguous.
+function EntryList({
+  fields,
+  durationUnit,
+  durationKey = "duration",
+  hasDescription = false,
+  descriptionPlaceholder,
+  entries,
+  draft,
+  setDraft,
+  onAdd,
+  onRemove,
+  emptyText,
+  renderTitle,
+  renderMeta,
+}) {
+  return (
+    <div>
+      <div className="grid grid-cols-1 gap-3 mb-3 sm:grid-cols-2">
+        {fields.map((f) => (
+          <input
+            key={f.key}
+            type="text"
+            placeholder={f.placeholder}
+            value={draft[f.key]}
+            onChange={(e) =>
+              setDraft((p) => ({ ...p, [f.key]: e.target.value }))
+            }
+            className={inputClass}
+          />
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-gray-500 text-[10px] font-medium uppercase tracking-widest whitespace-nowrap">
+          Duration <span className="tracking-normal text-gray-600 normal-case">({durationUnit})</span>
+        </span>
+
+        <input
+          type="number"
+          placeholder="0"
+          min={0}
+          max={99}
+          value={draft[durationKey]}
+          onChange={(e) =>
+            setDraft((p) => ({ ...p, [durationKey]: e.target.value }))
+          }
+          className="w-20 shrink-0 bg-gray-950/80 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm text-center placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 transition-all duration-200 focus:shadow-[0_0_0_3px_rgba(168,85,247,0.12)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.92 }}
+          type="button"
+          onClick={onAdd}
+          className="px-3 py-2.5 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
+        >
+          <FaPlus size={12} />
+        </motion.button>
+      </div>
+
+      {hasDescription && (
+        <textarea
+          rows={2}
+          placeholder={descriptionPlaceholder}
+          value={draft.description}
+          onChange={(e) =>
+            setDraft((p) => ({ ...p, description: e.target.value }))
+          }
+          className={`${inputClass} mb-4 resize-none`}
+        />
+      )}
+
+      {entries.length > 0 ? (
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={stagger(0.05)}
+          className="space-y-2"
+        >
+          {entries.map((entry) => (
+            <motion.div
+              key={entry.id}
+              variants={fadeUp}
+              whileHover={{ x: 3 }}
+              transition={{ duration: 0.2, ease: EASE }}
+              className="flex items-start justify-between gap-3 bg-gray-950/80 border border-white/10 rounded-lg px-4 py-2.5 hover:border-purple-500/30 transition-colors"
+            >
+              <div className="min-w-0 text-sm text-gray-200">
+                <div className="font-semibold truncate">
+                  {renderTitle(entry)}
+                </div>
+                <div className="mt-0.5 text-xs text-gray-500">
+                  {renderMeta(entry)}
+                </div>
+                {entry.description && (
+                  <div className="mt-1 text-xs leading-relaxed text-gray-400">
+                    {entry.description}
+                  </div>
+                )}
+              </div>
+
+              <motion.button
+                whileTap={{ scale: 0.85 }}
+                type="button"
+                onClick={() => onRemove(entry.id)}
+                className="mt-0.5 text-gray-500 transition-colors shrink-0 hover:text-red-400"
+              >
+                <FaTimes size={12} />
+              </motion.button>
+            </motion.div>
+          ))}
+        </motion.div>
+      ) : (
+        <p className="text-xs text-gray-600">{emptyText}</p>
       )}
     </div>
   );
@@ -558,8 +775,6 @@ export default function PredictForm({ setResult, setLoading, loading }) {
     backlogs: 0,
     ssc_marks: 70,
     hsc_marks: 70,
-    projects: 0,
-    workshops: 0,
     placement_training: "Yes",
     codingPlatform: "LeetCode",
     problemsSolved: 0,
@@ -569,17 +784,55 @@ export default function PredictForm({ setResult, setLoading, loading }) {
     aptitudeTestOther: "",
     aptitudeScored: 0,
     aptitudeTotal: 100,
+    // Personal / profile info — preferredRole and relocate are now real
+    // model inputs (PreferredRoleCategory / WillingToRelocate); portfolio
+    // link doubles as the HasPortfolio signal (see handleSubmit) and also
+    // stays around as a clickable extra for the profile UI.
+    preferredRole: PREFERRED_ROLES[0],
+    relocate: "No",
+    expectedCTC: 6,
+    portfolioLink: "",
   });
 
   const [technicalSkills, setTechnicalSkills] = useState([]);
   const [softSkills, setSoftSkills] = useState([]);
   const [certifications, setCertifications] = useState([]);
   const [internships, setInternships] = useState([]);
+  const [trainings, setTrainings] = useState([]);
+  const [projectEntries, setProjectEntries] = useState([]);
+  const [workshopEntries, setWorkshopEntries] = useState([]);
+  const [extracurricularEntries, setExtracurricularEntries] = useState([]);
 
   const [internDraft, setInternDraft] = useState({
     company: "",
     domain: "",
     duration: "",
+  });
+
+  const [trainingDraft, setTrainingDraft] = useState({
+    type: "",
+    duration: "",
+  });
+
+  const [projectDraft, setProjectDraft] = useState({
+    title: "",
+    stack: "",
+    duration: "",
+    description: "",
+  });
+
+  const [workshopDraft, setWorkshopDraft] = useState({
+    title: "",
+    organizer: "",
+    duration: "",
+    description: "",
+  });
+
+  const [extracurricularDraft, setExtracurricularDraft] = useState({
+    activity: "",
+    role: "",
+    duration: "",
+    description: "",
   });
 
   const sectionRef = useRef(null);
@@ -605,6 +858,12 @@ export default function PredictForm({ setResult, setLoading, loading }) {
 
       return next;
     });
+
+    // Clear logged trainings if the user flips training back to "No" —
+    // avoids submitting stale training entries for a "No" answer.
+    if (name === "placement_training" && value === "No") {
+      setTrainings([]);
+    }
   };
 
   const addInternship = () => {
@@ -627,6 +886,98 @@ export default function PredictForm({ setResult, setLoading, loading }) {
 
   const removeInternship = (id) => {
     setInternships((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const addTraining = () => {
+    if (!trainingDraft.type.trim() || !trainingDraft.duration) return;
+
+    setTrainings((prev) => [
+      ...prev,
+      {
+        type: trainingDraft.type.trim(),
+        duration_weeks: parseInt(trainingDraft.duration) || 0,
+        id: Date.now(),
+      },
+    ]);
+
+    setTrainingDraft({ type: "", duration: "" });
+  };
+
+  const removeTraining = (id) => {
+    setTrainings((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const addProject = () => {
+    if (!projectDraft.title.trim()) return;
+
+    setProjectEntries((prev) => [
+      ...prev,
+      {
+        title: projectDraft.title.trim(),
+        stack: projectDraft.stack.trim(),
+        duration: parseInt(projectDraft.duration) || 0,
+        description: projectDraft.description.trim(),
+        id: Date.now(),
+      },
+    ]);
+
+    setProjectDraft({ title: "", stack: "", duration: "", description: "" });
+  };
+
+  const removeProject = (id) => {
+    setProjectEntries((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const addWorkshop = () => {
+    if (!workshopDraft.title.trim()) return;
+
+    setWorkshopEntries((prev) => [
+      ...prev,
+      {
+        title: workshopDraft.title.trim(),
+        organizer: workshopDraft.organizer.trim(),
+        duration: parseInt(workshopDraft.duration) || 0,
+        description: workshopDraft.description.trim(),
+        id: Date.now(),
+      },
+    ]);
+
+    setWorkshopDraft({
+      title: "",
+      organizer: "",
+      duration: "",
+      description: "",
+    });
+  };
+
+  const removeWorkshop = (id) => {
+    setWorkshopEntries((prev) => prev.filter((w) => w.id !== id));
+  };
+
+  const addExtracurricular = () => {
+    if (!extracurricularDraft.activity.trim()) return;
+
+    setExtracurricularEntries((prev) => [
+      ...prev,
+      {
+        activity: extracurricularDraft.activity.trim(),
+        role: extracurricularDraft.role.trim(),
+        duration: parseInt(extracurricularDraft.duration) || 0,
+        description: extracurricularDraft.description.trim(),
+        id: Date.now(),
+      },
+    ]);
+
+    setExtracurricularDraft({
+      activity: "",
+      role: "",
+      duration: "",
+      description: "",
+    });
+  };
+
+  const removeExtracurricular = (id) => {
+    setExtracurricularEntries((prev) => prev.filter((x) => x.id !== id));
   };
 
   // Derived scores
@@ -661,6 +1012,11 @@ export default function PredictForm({ setResult, setLoading, loading }) {
           ? form.aptitudeTestOther.trim()
           : form.aptitudeTest;
 
+      const isTrained = form.placement_training === "Yes";
+      const preferredRoleCategory = PREFERRED_ROLES.indexOf(form.preferredRole);
+      const willingToRelocateCode = RELOCATE_OPTIONS.indexOf(form.relocate);
+      const hasPortfolio = form.portfolioLink.trim() ? 1 : 0;
+
       const payload = {
         gender: form.gender === "Male" ? 1 : form.gender === "Female" ? 0 : 2,
 
@@ -676,9 +1032,9 @@ export default function PredictForm({ setResult, setLoading, loading }) {
 
         internships: internships.length,
 
-        projects: parseInt(form.projects) || 0,
+        projects: projectEntries.length,
 
-        workshops: (parseInt(form.workshops) || 0) + certifications.length,
+        workshops: workshopEntries.length + certifications.length,
 
         technical_score: technicalScore,
 
@@ -690,8 +1046,14 @@ export default function PredictForm({ setResult, setLoading, loading }) {
 
         soft_skills: parseFloat(softSkillsScore.toFixed(1)) || 0,
 
-        extracurricular: 0,
-        placement_training: form.placement_training === "Yes" ? 1 : 0,
+        extracurricular: extracurricularEntries.length,
+        placement_training: isTrained ? 1 : 0,
+
+        // Real model inputs (retrained CatBoost — see hyperparameter_tune.py)
+        has_portfolio: hasPortfolio,
+        willing_to_relocate: willingToRelocateCode,
+        preferred_role_category: preferredRoleCategory,
+        expected_ctc: parseFloat(form.expectedCTC) || 0,
 
         // Extra fields — ignored by current model
         specialization: resolvedSpecialization,
@@ -717,6 +1079,28 @@ export default function PredictForm({ setResult, setLoading, loading }) {
         aptitude_marks_total: form.aptitudeTotal,
 
         internship_details: internships.map(({ id, ...rest }) => rest),
+
+        project_details: projectEntries.map(({ id, ...rest }) => rest),
+
+        workshop_details: workshopEntries.map(({ id, ...rest }) => rest),
+
+        extracurricular_details: extracurricularEntries.map(
+          ({ id, ...rest }) => rest,
+        ),
+
+        // Richer placement-training context — display/insight use only,
+        // the model still only ever sees the plain Yes/No above. Each
+        // training program keeps its own duration rather than one
+        // combined total.
+        training_details: isTrained
+          ? { entries: trainings.map(({ id, ...rest }) => rest) }
+          : null,
+
+        // Human-readable duplicates for the profile/insights UI — the
+        // model only ever sees the numeric fields above (has_portfolio,
+        // willing_to_relocate, preferred_role_category, expected_ctc).
+        preferred_role_label: form.preferredRole,
+        portfolio_link: form.portfolioLink.trim(),
       };
 
       const res = await axios.post(`${API}/predict`, payload);
@@ -786,8 +1170,8 @@ export default function PredictForm({ setResult, setLoading, loading }) {
               transition={{ delay: 0.4, duration: 0.4 }}
               className="max-w-md mx-auto mt-3 text-xs leading-relaxed text-gray-500"
             >
-              Fill in your details to get your placement prediction, benchmarked
-              against real student outcomes.
+              Fill in your details to get your placement prediction, along
+              with a clear breakdown of what's helping and what to improve.
             </motion.p>
           </motion.div>
 
@@ -807,7 +1191,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                     title="Academic details"
                   />
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+                  <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
                     <NumberStepper
                       label="CGPA"
                       name="cgpa"
@@ -866,7 +1250,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                     title="Branch & specialization"
                   />
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <div>
                       <label className={labelClass}>Branch</label>
                       <select
@@ -938,7 +1322,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                 <div className="p-4 md:p-5">
                   <SectionHeader icon={FaLaptopCode} title="Skills" />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                  <div className="grid grid-cols-1 gap-8 mb-6 md:grid-cols-2">
                     <TagPicker
                       label="Technical skills"
                       pool={TECHNICAL_SKILLS}
@@ -962,7 +1346,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
                     <div>
                       <label className={labelClass}>Coding platform</label>
                       <select
@@ -990,7 +1374,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
                     <NumberStepper
                       label="GitHub repos"
                       name="githubRepos"
@@ -1013,7 +1397,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
 
                   {/* Aptitude test */}
                   <div className="mb-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+                    <div className="grid grid-cols-1 gap-4 mb-3 sm:grid-cols-2">
                       <div>
                         <label className={labelClass}>Aptitude test</label>
                         <select
@@ -1096,7 +1480,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                 <div className="p-4 md:p-5">
                   <SectionHeader icon={FaBriefcase} title="Internships" />
 
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+                  <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-4">
                     <input
                       type="text"
                       placeholder="Company"
@@ -1144,7 +1528,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                         whileTap={{ scale: 0.92 }}
                         type="button"
                         onClick={addInternship}
-                        className="shrink-0 px-3 rounded-lg bg-purple-500/15 border border-purple-500/30 hover:bg-purple-500/25 text-purple-200 transition-colors"
+                        className="px-3 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
                       >
                         <FaPlus size={12} />
                       </motion.button>
@@ -1184,7 +1568,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                             whileTap={{ scale: 0.85 }}
                             type="button"
                             onClick={() => removeInternship(i.id)}
-                            className="text-gray-500 hover:text-red-400 transition-colors"
+                            className="text-gray-500 transition-colors hover:text-red-400"
                           >
                             <FaTimes size={12} />
                           </motion.button>
@@ -1202,13 +1586,16 @@ export default function PredictForm({ setResult, setLoading, loading }) {
             </HoverCard>
           </motion.div>
 
-          {/* 05 Other experience + Placement training (side by side) */}
+          {/* 05 Other experience (left) + Placement training & Personal
+              info stacked (right) — the right column's combined height
+              now naturally matches the left column instead of stretching
+              a near-empty Placement Training card to match it. */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="grid gap-4 mb-4 md:grid-cols-2"
+            className="grid items-start gap-4 mb-4 md:grid-cols-2"
           >
             <HoverCard>
               <GlowCard>
@@ -1218,72 +1605,306 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                     title="Other experience"
                   />
 
-                  <div className="grid grid-cols-2 gap-5">
-                    <NumberStepper
-                      label="Projects"
-                      name="projects"
-                      value={form.projects}
-                      onChange={handleChange}
-                      min={0}
-                      max={20}
-                    />
+                  <div className="space-y-6">
+                    <div>
+                      <label className={labelClass}>Projects</label>
+                      <EntryList
+                        fields={[
+                          { key: "title", placeholder: "Project title" },
+                          { key: "stack", placeholder: "Tech stack (e.g. React)" },
+                        ]}
+                        durationUnit="months"
+                        hasDescription
+                        descriptionPlaceholder="What did you build, and what was your role? (optional)"
+                        entries={projectEntries}
+                        draft={projectDraft}
+                        setDraft={setProjectDraft}
+                        onAdd={addProject}
+                        onRemove={removeProject}
+                        emptyText="No projects added yet — add each one, however small."
+                        renderTitle={(e) => e.title}
+                        renderMeta={(e) =>
+                          [e.stack, `${e.duration || 0} mo`]
+                            .filter(Boolean)
+                            .join(" · ")
+                        }
+                      />
+                    </div>
 
-                    <NumberStepper
-                      label="Workshops"
-                      name="workshops"
-                      value={form.workshops}
-                      onChange={handleChange}
-                      min={0}
-                      max={20}
-                    />
+                    <div className="pt-6 border-t border-white/5">
+                      <label className={labelClass}>
+                        Workshops &amp; courses
+                      </label>
+                      <EntryList
+                        fields={[
+                          { key: "title", placeholder: "Workshop / course" },
+                          { key: "organizer", placeholder: "Organizer" },
+                        ]}
+                        durationUnit="days"
+                        hasDescription
+                        descriptionPlaceholder="What did it cover? (optional)"
+                        entries={workshopEntries}
+                        draft={workshopDraft}
+                        setDraft={setWorkshopDraft}
+                        onAdd={addWorkshop}
+                        onRemove={removeWorkshop}
+                        emptyText="No workshops or courses added yet."
+                        renderTitle={(e) => e.title}
+                        renderMeta={(e) =>
+                          [
+                            e.organizer,
+                            `${e.duration || 0} day${e.duration === 1 ? "" : "s"}`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                        }
+                      />
+                    </div>
+
+                    <div className="pt-6 border-t border-white/5">
+                      <label className={labelClass}>
+                        Extracurricular activities
+                      </label>
+                      <EntryList
+                        fields={[
+                          { key: "activity", placeholder: "Activity (e.g. Club)" },
+                          { key: "role", placeholder: "Role (e.g. Lead)" },
+                        ]}
+                        durationUnit="months"
+                        hasDescription
+                        descriptionPlaceholder="What did you do there? (optional)"
+                        entries={extracurricularEntries}
+                        draft={extracurricularDraft}
+                        setDraft={setExtracurricularDraft}
+                        onAdd={addExtracurricular}
+                        onRemove={removeExtracurricular}
+                        emptyText="No extracurriculars added yet — clubs, sports, fests, volunteering all count."
+                        renderTitle={(e) => e.activity}
+                        renderMeta={(e) =>
+                          [e.role, `${e.duration || 0} mo`]
+                            .filter(Boolean)
+                            .join(" · ")
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
               </GlowCard>
             </HoverCard>
 
-            <HoverCard>
-              <GlowCard>
-                <div className="p-4 md:p-5">
-                  <SectionHeader
-                    icon={FaBriefcase}
-                    title="Placement training"
-                  />
+            <div className="flex flex-col gap-4">
+              <HoverCard>
+                <GlowCard>
+                  <div className="p-4 md:p-5">
+                    <SectionHeader
+                      icon={FaBriefcase}
+                      title="Placement training"
+                    />
 
-                  <SegmentedToggle
-                    label="Placement training"
-                    name="placement_training"
-                    value={form.placement_training}
-                    options={["Yes", "No"]}
-                    onChange={handleChange}
-                  />
-                </div>
-              </GlowCard>
-            </HoverCard>
-          </motion.div>
+                    <SegmentedToggle
+                      label="Placement training"
+                      name="placement_training"
+                      value={form.placement_training}
+                      options={["Yes", "No"]}
+                      onChange={handleChange}
+                    />
 
-          {/* 06 Personal info — full width, spans both columns above */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            className="mb-4"
-          >
-            <HoverCard>
-              <GlowCard>
-                <div className="p-4 md:p-5">
-                  <SectionHeader icon={FaUserAlt} title="Personal info" />
+                    <AnimatePresence initial={false}>
+                      {form.placement_training === "Yes" && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.25, ease: EASE }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pt-5 mt-5 border-t border-white/5">
+                            <label className={labelClass}>
+                              Training programs completed
+                            </label>
 
-                  <SegmentedToggle
-                    label="Gender"
-                    name="gender"
-                    value={form.gender}
-                    options={["Male", "Female", "Other"]}
-                    onChange={handleChange}
-                  />
-                </div>
-              </GlowCard>
-            </HoverCard>
+                            <datalist id="training-type-options">
+                              {TRAINING_TYPES.map((t) => (
+                                <option key={t} value={t} />
+                              ))}
+                            </datalist>
+
+                            <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-3">
+                              <input
+                                type="text"
+                                list="training-type-options"
+                                placeholder="Type e.g. Mock Interviews"
+                                value={trainingDraft.type}
+                                onChange={(e) =>
+                                  setTrainingDraft((p) => ({
+                                    ...p,
+                                    type: e.target.value,
+                                  }))
+                                }
+                                className={`${inputClass} sm:col-span-2`}
+                              />
+
+                              <div className="flex gap-2">
+                                <input
+                                  type="number"
+                                  placeholder="Weeks"
+                                  min={0}
+                                  max={52}
+                                  value={trainingDraft.duration}
+                                  onChange={(e) =>
+                                    setTrainingDraft((p) => ({
+                                      ...p,
+                                      duration: e.target.value,
+                                    }))
+                                  }
+                                  className={inputClass}
+                                />
+
+                                <motion.button
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.92 }}
+                                  type="button"
+                                  onClick={addTraining}
+                                  className="px-3 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
+                                >
+                                  <FaPlus size={12} />
+                                </motion.button>
+                              </div>
+                            </div>
+
+                            {trainings.length > 0 ? (
+                              <motion.div
+                                initial="hidden"
+                                animate="visible"
+                                variants={stagger(0.05)}
+                                className="space-y-2"
+                              >
+                                {trainings.map((t) => (
+                                  <motion.div
+                                    key={t.id}
+                                    variants={fadeUp}
+                                    whileHover={{ x: 3 }}
+                                    transition={{ duration: 0.2, ease: EASE }}
+                                    className="flex items-center justify-between bg-gray-950/80 border border-white/10 rounded-lg px-4 py-2.5 hover:border-purple-500/30 transition-colors"
+                                  >
+                                    <div className="text-sm text-gray-200">
+                                      <span className="font-semibold">
+                                        {t.type}
+                                      </span>
+                                      <span className="text-gray-500">
+                                        {" "}
+                                        · {t.duration_weeks} wk
+                                        {t.duration_weeks === 1 ? "" : "s"}
+                                      </span>
+                                    </div>
+
+                                    <motion.button
+                                      whileTap={{ scale: 0.85 }}
+                                      type="button"
+                                      onClick={() => removeTraining(t.id)}
+                                      className="text-gray-500 transition-colors hover:text-red-400"
+                                    >
+                                      <FaTimes size={12} />
+                                    </motion.button>
+                                  </motion.div>
+                                ))}
+                              </motion.div>
+                            ) : (
+                              <p className="text-xs text-gray-600">
+                                No trainings added yet — add each program
+                                separately so its own duration counts.
+                              </p>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </GlowCard>
+              </HoverCard>
+
+              <HoverCard>
+                <GlowCard>
+                  <div className="p-4 md:p-5">
+                    <SectionHeader icon={FaUserAlt} title="Personal info" />
+
+                    <div className="space-y-5">
+                      <SegmentedToggle
+                        label="Gender"
+                        name="gender"
+                        value={form.gender}
+                        options={["Male", "Female", "Other"]}
+                        onChange={handleChange}
+                      />
+
+                      <div>
+                        <label className={labelClass}>
+                          Preferred role / domain
+                        </label>
+
+                        {/* A closed dropdown, not free text — this is a
+                            real model category now (PreferredRoleCategory),
+                            so it has to be one of exactly the categories
+                            CatBoost was trained on. */}
+                        <select
+                          value={form.preferredRole}
+                          onChange={(e) =>
+                            handleChange("preferredRole", e.target.value)
+                          }
+                          className={selectClass}
+                        >
+                          {PREFERRED_ROLES.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <SegmentedToggle
+                          label="Willing to relocate"
+                          name="relocate"
+                          value={form.relocate}
+                          options={RELOCATE_OPTIONS}
+                          onChange={handleChange}
+                        />
+
+                        <NumberStepper
+                          label="Expected CTC (LPA)"
+                          name="expectedCTC"
+                          value={form.expectedCTC}
+                          onChange={handleChange}
+                          min={0}
+                          max={100}
+                          step={0.5}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>
+                          Portfolio / LinkedIn link
+                        </label>
+                        <input
+                          type="url"
+                          placeholder="https://linkedin.com/in/..."
+                          value={form.portfolioLink}
+                          onChange={(e) =>
+                            handleChange("portfolioLink", e.target.value)
+                          }
+                          className={inputClass}
+                        />
+                        <p className="mt-1.5 text-[11px] text-gray-600">
+                          Having a link on file counts as having a
+                          portfolio in the model's eyes — leave it blank
+                          if you don't have one yet.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </GlowCard>
+              </HoverCard>
+            </div>
           </motion.div>
 
           {/* Predict button — restrained premium CTA, echoes the app's accent */}

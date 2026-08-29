@@ -1,8 +1,11 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   motion,
+  animate,
   useMotionValue,
   useMotionTemplate,
+  useSpring,
+  useReducedMotion,
 } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { FaCheckCircle, FaTimesCircle } from "react-icons/fa";
@@ -15,16 +18,68 @@ const EASE = [0.16, 1, 0.3, 1];
 const labelClass =
   "block text-gray-500 text-[10px] font-medium mb-1.5 uppercase tracking-widest";
 
-function HoverCard({ children }) {
+// Same 3D-tilt treatment used on the Analysis page — kept local since
+// there's no shared component file for it yet.
+function TiltCard({ children, intensity = 6, className = "" }) {
+  const reduceMotion = useReducedMotion();
+  const ref = useRef(null);
+  const rotateX = useMotionValue(0);
+  const rotateY = useMotionValue(0);
+  const springX = useSpring(rotateX, { stiffness: 200, damping: 20 });
+  const springY = useSpring(rotateY, { stiffness: 200, damping: 20 });
+
+  const handleMove = (e) => {
+    if (reduceMotion || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    rotateY.set(px * intensity);
+    rotateX.set(-py * intensity);
+  };
+  const handleLeave = () => {
+    rotateX.set(0);
+    rotateY.set(0);
+  };
+
   return (
     <motion.div
-      whileHover={{ y: -3 }}
-      transition={{ duration: 0.25, ease: EASE }}
-      className="transition-shadow duration-300 rounded-2xl hover:shadow-[0_8px_30px_rgba(168,85,247,0.12)]"
+      ref={ref}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
+      style={{
+        perspective: 1000,
+        rotateX: springX,
+        rotateY: springY,
+        transformStyle: "preserve-3d",
+      }}
+      className={`h-full ${className}`}
     >
       {children}
     </motion.div>
   );
+}
+
+// Count-up on mount instead of snapping straight to the final value —
+// matches the animated stats used on the Hero and Analysis pages, so the
+// very first score a person sees behaves the same way as every other
+// number in the app.
+function AnimatedValue({ value, decimals = 1 }) {
+  const reduceMotion = useReducedMotion();
+  const [display, setDisplay] = useState(reduceMotion ? value : 0);
+  useEffect(() => {
+    if (reduceMotion) {
+      setDisplay(value);
+      return;
+    }
+    const controls = animate(0, value, {
+      duration: 1,
+      delay: 0.4,
+      ease: EASE,
+      onUpdate: (v) => setDisplay(v),
+    });
+    return () => controls.stop();
+  }, [value, reduceMotion]);
+  return <span className="tabular-nums">{display.toFixed(decimals)}</span>;
 }
 
 function MetricRow({ label, value, max = 100, accent, delay }) {
@@ -41,7 +96,7 @@ function MetricRow({ label, value, max = 100, accent, delay }) {
           className="text-xl font-bold tabular-nums"
           style={{ color: accent }}
         >
-          {value.toFixed(1)}
+          <AnimatedValue value={value} />
           <span className="text-xs text-gray-600 font-medium ml-0.5">
             {max === 100 ? "%" : `/${max}`}
           </span>
@@ -82,8 +137,14 @@ export default function ResultCard({ result }) {
     ? "linear-gradient(135deg, #15803d 0%, #22c55e 100%)"
     : "linear-gradient(135deg, #b91c1c 0%, #ef4444 100%)";
 
+  // practical_exposure is Internships + Projects + Workshops/Certs summed
+  // as a raw count (not a 0-100 score like the other two), so it gets its
+  // own scale here rather than reusing max=100.
+  const practicalExposure = result.engineered_scores?.practical_exposure ?? 0;
+  const practicalMax = Math.max(15, Math.ceil(practicalExposure / 5) * 5);
+
   return (
-    <section className="max-w-3xl mx-auto px-6 pb-16">
+    <section className="max-w-3xl px-6 pb-16 mx-auto">
       <div
         ref={sectionRef}
         onMouseMove={handleMouseMove}
@@ -157,8 +218,9 @@ export default function ResultCard({ result }) {
             transition={{ delay: 0.45, duration: 0.4 }}
             className="max-w-md mx-auto mt-3 text-xs leading-relaxed text-gray-500"
           >
-            Based on your academic record, skills, and experience, benchmarked
-            against real student outcomes.
+            {placed
+              ? "Your academic record, skills, and experience point toward a strong shot at placement."
+              : "Your academic record, skills, and experience suggest there's room to strengthen before placement season."}
           </motion.p>
         </motion.div>
 
@@ -168,8 +230,8 @@ export default function ResultCard({ result }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <HoverCard>
-            <GlowCard>
+          <TiltCard>
+            <GlowCard className="h-full">
               <div className="p-5 md:p-6">
                 <div className="flex items-baseline justify-between mb-1">
                   <h2 className="text-xs font-semibold tracking-wide text-white uppercase">
@@ -207,10 +269,17 @@ export default function ResultCard({ result }) {
                     accent="linear-gradient(90deg, #2563eb, #38bdf8)"
                     delay={0.55}
                   />
+                  <MetricRow
+                    label="Practical exposure"
+                    value={practicalExposure}
+                    max={practicalMax}
+                    accent="linear-gradient(90deg, #059669, #34d399)"
+                    delay={0.65}
+                  />
                 </motion.div>
               </div>
             </GlowCard>
-          </HoverCard>
+          </TiltCard>
         </motion.div>
 
         {/* CTA — same premium gradient button as PredictForm */}

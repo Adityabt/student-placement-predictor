@@ -24,7 +24,13 @@ FEATURE_COLS = [
     'Internships', 'Projects', 'Workshops/Certifications',
     'TechnicalSkillScore', 'CodingPlatformScore', 'GitHubScore',
     'AptitudeTestScore', 'SoftSkillsRating', 'ExtracurricularActivities',
-    'PlacementTraining'
+    'PlacementTraining',
+    # New — see hyperparameter_tune.py for the categorical handling
+    # (WillingToRelocate / PreferredRoleCategory) these need for CatBoost;
+    # this baseline script doesn't do categorical encoding for any model
+    # here besides Branch/Gender already being left as raw ints, so these
+    # new categorical ints ride along the same way.
+    'HasPortfolio', 'WillingToRelocate', 'PreferredRoleCategory', 'ExpectedCTC',
 ]
 
 X = df[FEATURE_COLS]
@@ -74,7 +80,8 @@ best_model = models[best_model_name]
 
 print(f"\n✅ Best Model: {best_model_name} ({results_df.loc[best_model_name, 'Accuracy']}% accuracy)")
 print("Note: production model is trained separately in hyperparameter_tune.py")
-print("with CatBoost + true categorical Branch/Gender + Optuna tuning.")
+print("with CatBoost + true categorical Branch/Gender/WillingToRelocate/")
+print("PreferredRoleCategory + Optuna tuning.")
 
 joblib.dump(best_model, 'baseline_model.pkl')
 print("💾 baseline_model.pkl saved — comparison reference only, NOT used in the app")

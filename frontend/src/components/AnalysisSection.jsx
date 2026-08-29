@@ -38,8 +38,21 @@ const DONUT_COLORS = [
   "#22d3ee",
   "#f59e0b",
   "#34d399",
+  "#f472b6",
+  "#818cf8",
+  "#facc15",
+  "#2dd4bf",
+  "#fb7185",
+  "#84cc16",
 ];
-const BRANCHES = ["CSE", "Civil", "ECE", "EEE", "IT", "Mechanical"];
+const BRANCHES = [
+  "CSE", "Civil", "ECE", "EEE", "IT", "Mechanical",
+  "AI & Data Science", "Cybersecurity", "Biotechnology",
+  "Chemical", "Aerospace", "Robotics & Automation",
+];
+// Index-aligned with WillingToRelocate's training encoding in
+// hyperparameter_tune.py (0=No, 1=Yes, 2=Flexible)
+const RELOCATE_LABELS = ["No", "Yes", "Flexible"];
 const EASE = [0.16, 1, 0.3, 1];
 
 const labelClass =
@@ -90,7 +103,7 @@ function findCgpaBand(cgpa, bands) {
 
 function generateInsights(
   dataset_summary,
-  global_importance,
+  grouped_importance,
   branch_stats,
   cgpa_bands,
 ) {
@@ -102,7 +115,7 @@ function generateInsights(
     const best = sorted[0];
     const worst = sorted[sorted.length - 1];
     insights.push({
-      text: `${best.branch} leads at ${fmtPct(best.placement_rate)}% — ${worst.branch} trails at ${fmtPct(worst.placement_rate)}%, the widest gap in the dataset.`,
+      text: `${best.branch} leads at ${fmtPct(best.placement_rate)}% — ${worst.branch} trails at ${fmtPct(worst.placement_rate)}%, the widest gap of any branch.`,
     });
   }
   if (cgpa_bands.length > 1) {
@@ -117,8 +130,8 @@ function generateInsights(
       });
     }
   }
-  if (global_importance.length > 1) {
-    const sorted = [...global_importance].sort(
+  if (grouped_importance.length > 1) {
+    const sorted = [...grouped_importance].sort(
       (a, b) => b.importance - a.importance,
     );
     const top = sorted[0];
@@ -126,7 +139,7 @@ function generateInsights(
     if (second.importance > 0) {
       const ratio = (top.importance / second.importance).toFixed(1);
       insights.push({
-        text: `${top.feature} outweighs every other factor, carrying ${ratio}× the influence of the next-strongest predictor, ${second.feature}.`,
+        text: `${top.group} outweighs every other factor, carrying ${ratio}× the influence of the next-strongest factor, ${second.group}.`,
       });
     }
   }
@@ -178,6 +191,14 @@ function generatePersonalInsights(result, data) {
   const githubRepos = Number(inputs.github_repos) || 0;
   const training = !!inputs.placement_training;
 
+  // New — real model inputs now (see hyperparameter_tune.py), not just
+  // display extras.
+  const hasPortfolio = !!inputs.has_portfolio;
+  const relocateCode = Number(inputs.willing_to_relocate) || 0;
+  const relocateLabel = RELOCATE_LABELS[relocateCode] || "No";
+  const preferredRoleLabel = inputs.preferred_role_label || "—";
+  const expectedCTC = Number(inputs.expected_ctc) || 0;
+
   const insights = [];
   const strengths = [];
   const gaps = [];
@@ -186,7 +207,7 @@ function generatePersonalInsights(result, data) {
   const confidenceDelta = confidence - avgRate;
   insights.push({
     type: "benchmark",
-    text: `Your predicted placement probability is ${fmtPct(confidence)}%, which is ${Math.abs(confidenceDelta).toFixed(1)} points ${confidenceDelta >= 0 ? "above" : "below"} the dataset-wide average of ${fmtPct(avgRate)}%.`,
+    text: `Your predicted placement probability is ${fmtPct(confidence)}%, which is ${Math.abs(confidenceDelta).toFixed(1)} points ${confidenceDelta >= 0 ? "above" : "below"} the overall average of ${fmtPct(avgRate)}%.`,
   });
 
   let branchRank = null;
@@ -204,12 +225,12 @@ function generatePersonalInsights(result, data) {
       ) + 1;
     insights.push({
       type: "branch",
-      text: `${branchName} has a ${fmtPct(branchMatch.placement_rate)}% placement rate in this dataset — ranked #${branchRank} of ${branchTotal} branches.`,
+      text: `${branchName} has a ${fmtPct(branchMatch.placement_rate)}% placement rate overall — ranked #${branchRank} of ${branchTotal} branches.`,
     });
     if (branchMatch.placement_rate >= avgRate) {
-      strengths.push(`${branchName} branch performs above the dataset average`);
+      strengths.push(`${branchName} branch performs above the overall average`);
     } else {
-      gaps.push(`${branchName} branch performs below the dataset average`);
+      gaps.push(`${branchName} branch performs below the overall average`);
     }
   }
 
@@ -221,7 +242,7 @@ function generatePersonalInsights(result, data) {
     });
     if (band.placement_rate >= avgRate) {
       strengths.push(
-        `CGPA band (${band.range}) sits above the dataset average`,
+        `CGPA band (${band.range}) sits above the overall average`,
       );
     } else {
       gaps.push(
@@ -253,6 +274,24 @@ function generatePersonalInsights(result, data) {
       label: training
         ? "having completed placement training"
         : "not having completed placement training",
+    },
+    {
+      keys: ["portfolio"],
+      label: hasPortfolio
+        ? "having a linked portfolio/LinkedIn profile"
+        : "not having a linked portfolio",
+    },
+    {
+      keys: ["relocat"],
+      label: `your relocation preference (${relocateLabel})`,
+    },
+    {
+      keys: ["role"],
+      label: `your preferred role (${preferredRoleLabel})`,
+    },
+    {
+      keys: ["ctc", "expected"],
+      label: `your expected CTC (${expectedCTC} LPA)`,
     },
   ];
 
@@ -318,7 +357,7 @@ function generatePersonalInsights(result, data) {
     strengths.push(`${problemsSolved} problems solved — strong DSA practice`);
   } else if (problemsSolved < 50) {
     gaps.push(
-      `${problemsSolved} problems solved — dataset-wide, higher problem counts correlate with stronger outcomes`,
+      `${problemsSolved} problems solved — higher problem counts generally correlate with stronger outcomes`,
     );
   }
 
@@ -326,6 +365,24 @@ function generatePersonalInsights(result, data) {
     strengths.push("Completed placement training");
   } else {
     gaps.push("Placement training not completed");
+  }
+
+  if (hasPortfolio) {
+    strengths.push("Has a linked portfolio/LinkedIn profile");
+  } else {
+    gaps.push(
+      "No portfolio or LinkedIn link on file — an easy one to add",
+    );
+  }
+
+  if (relocateCode === 1 || relocateCode === 2) {
+    strengths.push(
+      `Open to relocation (${relocateLabel}) — widens the pool of matching offers`,
+    );
+  } else {
+    gaps.push(
+      "Not open to relocation — this narrows the pool of matching offers",
+    );
   }
 
   const academic = scores.academic_score ?? 0;
@@ -800,30 +857,98 @@ function PlacementChip({ branch, placement_rate, i }) {
   );
 }
 
-function Bar({ label, value, max, i }) {
+/* ---------------------------------------------------------------------- */
+/*  New: expandable category row for the "What Matters Most" panel        */
+/* ---------------------------------------------------------------------- */
+
+function GroupImportanceRow({ group, i }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasChildren = Array.isArray(group.features) && group.features.length > 0;
+
   return (
-    <motion.div variants={fadeUp} className="mb-3 last:mb-0 group">
-      <div className="flex items-baseline justify-between mb-1.5">
-        <span className="text-xs font-medium text-gray-300 transition-colors group-hover:text-white">
-          {label}
-        </span>
-        <span className="font-semibold text-white ext-xs tabular-nums">
-          {fmtPct(value)}%
-        </span>
+    <motion.div
+      variants={fadeUp}
+      className="py-4 border-b first:pt-0 last:pb-0 border-white/5 last:border-b-0"
+    >
+      <div
+        className={`group ${hasChildren ? "cursor-pointer select-none" : ""}`}
+        onClick={() => hasChildren && setExpanded((e) => !e)}
+      >
+        <div className="flex items-baseline justify-between mb-1.5">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-gray-300 transition-colors group-hover:text-white">
+            {group.group}
+            {hasChildren && (
+              <motion.span
+                animate={{ rotate: expanded ? 180 : 0 }}
+                transition={{ duration: 0.25, ease: EASE }}
+                className="text-gray-600 group-hover:text-gray-400"
+              >
+                <FiChevronDown size={11} />
+              </motion.span>
+            )}
+          </span>
+          <span className="text-xs font-semibold text-white tabular-nums">
+            {fmtPct(group.importance)}%
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-gray-800/80">
+          <motion.div
+            initial={{ width: 0 }}
+            whileInView={{ width: `${group.importance}%` }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7, delay: i * 0.05, ease: EASE }}
+            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 group-hover:brightness-125 transition-[filter]"
+          />
+        </div>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-gray-800/80">
-        <motion.div
-          initial={{ width: 0 }}
-          whileInView={{ width: `${(value / max) * 100}%` }}
-          viewport={{ once: true }}
-          transition={{
-            duration: 0.7,
-            delay: i * 0.05,
-            ease: EASE,
-          }}
-          className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 group-hover:brightness-125 transition-[filter]"
-        />
-      </div>
+
+      <AnimatePresence initial={false}>
+        {hasChildren && expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: EASE }}
+            className="overflow-hidden"
+          >
+            <div className="pt-3 pb-1 pl-4 mt-1 ml-1 space-y-2.5 border-l border-white/10">
+              {group.features.map((f, fi) => (
+                <motion.div
+                  key={f.feature}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: fi * 0.05, duration: 0.25, ease: EASE }}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] text-gray-400">
+                      {f.feature}
+                    </span>
+                    <span className="text-[11px] font-semibold text-gray-300 tabular-nums">
+                      {fmtPct(f.share_of_group)}%
+                    </span>
+                  </div>
+                  <div className="h-1 overflow-hidden rounded-full bg-gray-950/80">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${f.share_of_group}%` }}
+                      transition={{ duration: 0.5, delay: fi * 0.05, ease: EASE }}
+                      className="h-full rounded-full"
+                      style={{
+                        background: "linear-gradient(90deg, #a855f7, #ec4899)",
+                        opacity: 0.75,
+                      }}
+                    />
+                  </div>
+                </motion.div>
+              ))}
+              <p className="pt-1 text-[10px] text-gray-600 leading-relaxed">
+                Share of {group.group.toLowerCase()}'s overall contribution to
+                placement outcomes.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -1275,6 +1400,10 @@ function YourResult({ result, data }) {
   const problemsSolved = Number(inputs.problems_solved) || 0;
   const githubRepos = Number(inputs.github_repos) || 0;
   const training = !!inputs.placement_training;
+  const relocateLabel =
+    RELOCATE_LABELS[Number(inputs.willing_to_relocate) || 0] || "No";
+  const preferredRoleLabel = inputs.preferred_role_label || null;
+  const portfolioLink = inputs.portfolio_link || null;
 
   const academic = scores.academic_score ?? 0;
   const employability = scores.employability_score ?? 0;
@@ -1432,8 +1561,7 @@ function YourResult({ result, data }) {
                   Branch standing
                 </h2>
                 <p className="mb-4 text-[11px] text-gray-500">
-                  {branchName || "Your branch"} ranked among all branches in the
-                  dataset.
+                  {branchName || "Your branch"} ranked among all branches.
                 </p>
                 <div className="flex flex-col justify-center flex-1">
                   {branchRank ? (
@@ -1640,6 +1768,24 @@ function YourResult({ result, data }) {
                     ? "Completed placement training"
                     : "No placement training yet"}
                 </span>
+                {preferredRoleLabel && (
+                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-gray-300">
+                    Targeting {preferredRoleLabel}
+                  </span>
+                )}
+                <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-gray-300">
+                  Relocation: {relocateLabel}
+                </span>
+                {portfolioLink && (
+                  <a
+                    href={portfolioLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/10 border border-purple-500/30 text-purple-200 hover:bg-purple-500/20 transition-colors"
+                  >
+                    View portfolio ↗
+                  </a>
+                )}
               </div>
               <div className="space-y-4">
                 <ChipList
@@ -1666,7 +1812,7 @@ const headlineLines = [
 ];
 
 /* ---------------------------------------------------------------------- */
-/*  New: modal wrapper, pre-prediction CTA, extracted dataset overview    */
+/*  New: modal wrapper, pre-prediction CTA, extracted overview content    */
 /* ---------------------------------------------------------------------- */
 
 function Modal({ onClose, children }) {
@@ -1726,7 +1872,7 @@ function PredictCTA() {
                 Get your personal placement prediction first
               </h2>
               <p className="max-w-md mt-2 text-xs leading-relaxed text-gray-500">
-                What you're seeing below is the dataset-wide analysis. Run
+                What you're seeing below is the overall placement analysis. Run
                 your own prediction to see a personalized breakdown built
                 around your profile.
               </p>
@@ -1759,11 +1905,16 @@ function DefaultAnalysisContent({ data }) {
     my.set(((e.clientY - rect.top) / rect.height) * 100);
   };
 
-  const { dataset_summary, global_importance, branch_stats, cgpa_bands } = data;
-  const maxImportance = Math.max(...global_importance.map((f) => f.importance));
-  const insights = generateInsights(
+  const {
     dataset_summary,
     global_importance,
+    grouped_importance,
+    branch_stats,
+    cgpa_bands,
+  } = data;
+  const insights = generateInsights(
+    dataset_summary,
+    grouped_importance,
     branch_stats,
     cgpa_bands,
   );
@@ -1774,7 +1925,12 @@ function DefaultAnalysisContent({ data }) {
   const rankedBranches = [...branch_stats].sort(
     (a, b) => b.placement_rate - a.placement_rate,
   );
-  const topPredictor = [...global_importance].sort(
+  // Grouped, not raw-feature — so this always agrees with "What matters
+  // most" below. A single numeric feature (e.g. Expected CTC) can carry
+  // more raw split-importance than any other individual feature while
+  // its whole category still ranks below another category's combined
+  // total; showing the top CATEGORY here keeps the two panels consistent.
+  const topPredictor = [...grouped_importance].sort(
     (a, b) => b.importance - a.importance,
   )[0];
   const topCgpaBand = cgpa_bands[cgpa_bands.length - 1];
@@ -1855,7 +2011,10 @@ function DefaultAnalysisContent({ data }) {
                 </div>
                 <div className="flex-1 min-w-0 border-t sm:border-t-0 sm:border-l border-white/10">
                   <div className="grid grid-cols-2 p-5 gap-x-8 gap-y-4 sm:grid-cols-3 sm:p-6">
-                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                    <motion.div
+                      whileHover={{ scale: 1.04 }}
+                      transition={{ duration: 0.2 }}
+                    >
                       <div className="mt-5 text-xl font-semibold text-white">
                         <AnimatedStat value={dataset_summary.total_students} />
                       </div>
@@ -1863,15 +2022,24 @@ function DefaultAnalysisContent({ data }) {
                         Students
                       </div>
                     </motion.div>
-                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                    <motion.div
+                      whileHover={{ scale: 1.04 }}
+                      transition={{ duration: 0.2 }}
+                    >
                       <div className="mt-5 text-xl font-semibold text-white">
-                        <AnimatedStat value={dataset_summary.avg_cgpa} decimals={2} />
+                        <AnimatedStat
+                          value={dataset_summary.avg_cgpa}
+                          decimals={2}
+                        />
                       </div>
                       <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
                         Avg CGPA
                       </div>
                     </motion.div>
-                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                    <motion.div
+                      whileHover={{ scale: 1.04 }}
+                      transition={{ duration: 0.2 }}
+                    >
                       <div className="mt-5 text-xl font-semibold text-white truncate">
                         {bestBranch.branch}
                       </div>
@@ -1879,7 +2047,10 @@ function DefaultAnalysisContent({ data }) {
                         Top branch
                       </div>
                     </motion.div>
-                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                    <motion.div
+                      whileHover={{ scale: 1.04 }}
+                      transition={{ duration: 0.2 }}
+                    >
                       <div className="text-xl font-semibold text-white tabular-nums">
                         {fmtPct(bestBranch.placement_rate)}%
                       </div>
@@ -1887,15 +2058,22 @@ function DefaultAnalysisContent({ data }) {
                         Top rate
                       </div>
                     </motion.div>
-                    <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }} className="col-span-2 sm:col-span-1">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      transition={{ duration: 0.2 }}
+                      className="col-span-2 sm:col-span-1"
+                    >
                       <div className="text-xl font-semibold leading-snug text-white ">
-                        {topPredictor.feature}
+                        {topPredictor.group}
                       </div>
                       <div className="mt-1 text-[10px] tracking-wide text-gray-500 uppercase">
-                        Top predictor
+                        Top factor
                       </div>
                     </motion.div>
-                    <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+                    <motion.div
+                      whileHover={{ scale: 1.04 }}
+                      transition={{ duration: 0.2 }}
+                    >
                       <div className="text-xl font-semibold text-white tabular-nums">
                         {fmtPct(topCgpaBand.placement_rate)}%
                       </div>
@@ -1908,8 +2086,13 @@ function DefaultAnalysisContent({ data }) {
               </div>
               {footerInsight && (
                 <div className="flex items-start gap-2 px-5 pt-3 pb-4 border-t sm:px-6 border-white/5">
-                  <FiZap className="mt-0.5 text-purple-400 shrink-0" size={12} />
-                  <p className="text-xs leading-relaxed text-gray-400">{footerInsight}</p>
+                  <FiZap
+                    className="mt-0.5 text-purple-400 shrink-0"
+                    size={12}
+                  />
+                  <p className="text-xs leading-relaxed text-gray-400">
+                    {footerInsight}
+                  </p>
                 </div>
               )}
             </GlowCard>
@@ -1917,80 +2100,152 @@ function DefaultAnalysisContent({ data }) {
         </motion.div>
       </div>
 
-      <div id="importance" className="grid items-stretch gap-4 mb-4 md:grid-cols-2">
-        <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
-          <TiltCard>
-            <GlowCard>
-              <div className="p-4 md:p-5">
-                <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase">
-                  What matters most
-                </h2>
-                <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger(0.05)}>
-                  {global_importance.slice(0, 5).map((f, i) => (
-                    <Bar key={f.feature} label={f.feature} value={f.importance} max={maxImportance} i={i} />
-                  ))}
-                </motion.div>
-              </div>
-            </GlowCard>
-          </TiltCard>
-        </motion.div>
-        <motion.div id="branches" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.05 }}>
-          <TiltCard>
-            <GlowCard>
-              <div className="p-4 md:p-5">
-                <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase h-fit">
-                  Branch composition
-                </h2>
-                <div className="flex items-center gap-6">
-                  <DonutChart branches={branch_stats} />
-                  <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger(0.04)} className="flex-1 min-w-0 space-y-3">
-                    {branch_stats.map((b, i) => (
-                      <BranchChip key={b.branch} branch={b.branch} count={b.count} total={totalBranchCount} color={DONUT_COLORS[i % DONUT_COLORS.length]} i={i} />
-                    ))}
-                  </motion.div>
-                </div>
-              </div>
-            </GlowCard>
-          </TiltCard>
-        </motion.div>
-      </div>
+      <div
+  id="importance"
+  className="grid items-stretch gap-4 mb-4 md:grid-cols-2"
+>
+  <motion.div
+    className="h-full"
+    initial={{ opacity: 0, y: 16 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.5 }}
+  >
+    <TiltCard className="h-full">
+      <GlowCard className="h-full">
+        <div className="flex flex-col h-full p-4 md:p-5">
+          <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase">
+            What matters most
+          </h2>
+          <p className="mb-4 text-[11px] text-gray-500">
+            Tap a category to see exactly what's driving it.
+          </p>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={stagger(0.05)}
+          >
+            {grouped_importance.map((group, i) => (
+              <GroupImportanceRow key={group.group} group={group} i={i} />
+            ))}
+          </motion.div>
+        </div>
+      </GlowCard>
+    </TiltCard>
+  </motion.div>
+  <motion.div
+    id="branches"
+    className="h-full"
+    initial={{ opacity: 0, y: 16 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.5, delay: 0.05 }}
+  >
+    <TiltCard className="h-full">
+      <GlowCard className="h-full">
+        <div className="flex flex-col h-full p-4 md:p-5">
+          <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase h-fit">
+            Branch composition
+          </h2>
+          <div className="flex items-center gap-6">
+            <DonutChart branches={branch_stats} />
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.2 }}
+              variants={stagger(0.04)}
+              className="flex-1 min-w-0 space-y-3"
+            >
+              {branch_stats.map((b, i) => (
+                <BranchChip
+                  key={b.branch}
+                  branch={b.branch}
+                  count={b.count}
+                  total={totalBranchCount}
+                  color={DONUT_COLORS[i % DONUT_COLORS.length]}
+                  i={i}
+                />
+              ))}
+            </motion.div>
+          </div>
+        </div>
+      </GlowCard>
+    </TiltCard>
+  </motion.div>
+</div>
 
-      <div className="grid gap-4 mb-4 md:grid-cols-2">
-        <motion.div id="rates" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
-          <TiltCard>
-            <GlowCard>
-              <div className="p-4 md:p-5">
-                <h2 className="mb-1 text-xs font-semibold tracking-wide text-white uppercase">
-                  Placement by branch
-                </h2>
-                <p className="mb-3 text-[11px] text-gray-500">Ranked by outcome rate</p>
-                <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger(0.04)}>
-                  {rankedBranches.map((b, i) => (
-                    <PlacementChip key={b.branch} branch={b.branch} placement_rate={b.placement_rate} i={i} />
-                  ))}
-                </motion.div>
-              </div>
-            </GlowCard>
-          </TiltCard>
-        </motion.div>
-        <motion.div id="cgpa" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.05 }}>
-          <TiltCard>
-            <GlowCard>
-              <div className="p-4 md:p-5">
-                <h2 className="mb-1 text-xs font-semibold tracking-wide text-white uppercase">
-                  CGPA vs placement
-                </h2>
-                <p className="mb-5 text-[11px] text-gray-500">
-                  Placement likelihood climbs steadily as CGPA increases.
-                </p>
-                <Sparkline bands={cgpa_bands} />
-              </div>
-            </GlowCard>
-          </TiltCard>
-        </motion.div>
-      </div>
+      <div className="grid items-stretch gap-4 mb-4 md:grid-cols-2">
+  <motion.div
+    id="rates"
+    className="h-full"
+    initial={{ opacity: 0, y: 16 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.5 }}
+  >
+    <TiltCard className="h-full">
+      <GlowCard className="h-full">
+        <div className="flex flex-col h-full p-4 md:p-5">
+          <h2 className="mb-3 text-xs font-semibold tracking-wide text-white uppercase">
+            Placement by branch
+          </h2>
+          <p className="mb-4 text-[11px] text-gray-500">
+            Ranked by outcome rate
+          </p>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={stagger(0.04)}
+          >
+            {rankedBranches.map((b, i) => (
+              <PlacementChip
+                key={b.branch}
+                branch={b.branch}
+                placement_rate={b.placement_rate}
+                i={i}
+              />
+            ))}
+          </motion.div>
+        </div>
+      </GlowCard>
+    </TiltCard>
+  </motion.div>
+  <motion.div
+    id="cgpa"
+    className="h-full"
+    initial={{ opacity: 0, y: 16 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.5, delay: 0.05 }}
+  >
+    <TiltCard className="h-full">
+      <GlowCard className="h-full">
+        <div className="flex flex-col h-full p-4 md:p-5">
+          <h2 className="mb-1 text-xs font-semibold tracking-wide text-white uppercase">
+            CGPA vs placement
+          </h2>
+          <p className="mb-5 text-[11px] text-gray-500">
+            Placement likelihood climbs steadily as CGPA increases.
+          </p>
+          <div className="flex items-center justify-center flex-1">
+            <Sparkline bands={cgpa_bands} />
+          </div>
+        </div>
+      </GlowCard>
+    </TiltCard>
+  </motion.div>
+</div>
 
-      <motion.div id="insights" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="mb-4">
+      <motion.div
+        id="insights"
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+        className="mb-4"
+      >
         <TiltCard>
           <GlowCard>
             <div className="p-4 md:p-5">
@@ -2086,7 +2341,7 @@ export default function AnalysisSection() {
         ) : (
           <div className="pt-6">
             <PredictCTA />
-            <SectionDivider label="Dataset Overview" />
+            <SectionDivider label="Overall Placement Trends" />
             <DefaultAnalysisContent data={data} />
           </div>
         )}

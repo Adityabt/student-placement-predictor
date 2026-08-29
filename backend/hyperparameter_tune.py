@@ -14,9 +14,14 @@ FEATURE_COLS = [
     'Internships', 'Projects', 'Workshops/Certifications',
     'TechnicalSkillScore', 'CodingPlatformScore', 'GitHubScore',
     'AptitudeTestScore', 'SoftSkillsRating', 'ExtracurricularActivities',
-    'PlacementTraining'
+    'PlacementTraining',
+    # New — personal/profile fields that now carry real signal instead of
+    # riding along as ignored payload extras. WillingToRelocate and
+    # PreferredRoleCategory are categorical (added to CAT_FEATURES below);
+    # HasPortfolio and ExpectedCTC are numeric like the rest.
+    'HasPortfolio', 'WillingToRelocate', 'PreferredRoleCategory', 'ExpectedCTC',
 ]
-CAT_FEATURES = ['Gender', 'Branch']
+CAT_FEATURES = ['Gender', 'Branch', 'WillingToRelocate', 'PreferredRoleCategory']
 
 X = df[FEATURE_COLS]
 y = df['PlacementStatus']
