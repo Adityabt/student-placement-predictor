@@ -30,7 +30,7 @@ import GlowCard from "../components/GlowCard";
 import SectionDivider from "../components/SectionDivider";
 import { stagger, fadeUp } from "../lib/motionVariants";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const DONUT_COLORS = [
   "#a855f7",
   "#ec4899",

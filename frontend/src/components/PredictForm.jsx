@@ -22,7 +22,7 @@ import GlowCard from "../components/GlowCard";
 import { IoMdAnalytics } from "react-icons/io";
 import { stagger, fadeUp } from "../lib/motionVariants";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const EASE = [0.16, 1, 0.3, 1];
 
