@@ -15,6 +15,8 @@ import {
   FaTimes,
   FaPlus,
   FaCertificate,
+  FaCode,
+  FaUsers,
 } from "react-icons/fa";
 import GlowCard from "../components/GlowCard";
 import { IoMdAnalytics } from "react-icons/io";
@@ -327,6 +329,31 @@ const PREFERRED_ROLES = [
 // sent straight to the model with no separate mapping step.
 const RELOCATE_OPTIONS = ["No", "Yes", "Flexible"];
 
+// Every "duration" input in this form (projects, workshops, internships,
+// extracurriculars, training programs) now lets the person pick the unit
+// that actually matches what they did, instead of forcing everything
+// into one hard-coded unit. A 2-month workshop gets typed as "2 Months",
+// not converted by hand into "60 Days". Whatever unit is chosen gets
+// normalized on submit (see toMonths/toWeeks) so scoring stays consistent
+// no matter which unit the person picked.
+const DURATION_UNITS = [
+  { value: "days", label: "Days" },
+  { value: "months", label: "Months" },
+  { value: "years", label: "Years" },
+];
+
+const toMonths = (value, unit) => {
+  const n = parseFloat(value) || 0;
+  const factor = unit === "days" ? 1 / 30 : unit === "years" ? 12 : 1;
+  return Math.round(n * factor * 10) / 10;
+};
+
+const toWeeks = (value, unit) => {
+  const n = parseFloat(value) || 0;
+  const factor = unit === "days" ? 1 / 7 : unit === "years" ? 52 : 4.345;
+  return Math.round(n * factor * 10) / 10;
+};
+
 const labelClass =
   "block text-gray-500 text-[10px] font-medium mb-1.5 uppercase tracking-widest";
 
@@ -334,6 +361,14 @@ const inputClass =
   "w-full bg-gray-950/80 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 transition-all duration-200 focus:shadow-[0_0_0_3px_rgba(168,85,247,0.12)]";
 
 const selectClass = `${inputClass} appearance-none cursor-pointer`;
+
+const chevronBg = {
+  backgroundImage:
+    "url(\"data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 8px center",
+  backgroundSize: "8px",
+};
 
 // ---- Shared chrome (mirrors the Analysis page) ----
 
@@ -346,6 +381,27 @@ function HoverCard({ children, className = "" }) {
     >
       {children}
     </motion.div>
+  );
+}
+
+// StretchCard wraps HoverCard + GlowCard for the two-up rows below
+// (Projects/Placement training, Workshops/Personal info) where both
+// cards in a row must end on the same baseline no matter which one has
+// more content. `items-stretch` on the parent grid already gives this
+// wrapper a real, definite height (CSS Grid rows size to their tallest
+// cell); the `[&>*]:...` selectors below then force that real height
+// through GlowCard's own root node from the outside — turning it into a
+// flex column that fills 100% of the space it was given — without
+// needing to touch GlowCard's source. If GlowCard enforces its own fixed
+// or aspect-ratio height internally, that would still win over this and
+// GlowCard itself would need a small edit (add `h-full` to its root).
+function StretchCard({ children, className = "" }) {
+  return (
+    <HoverCard className={`flex h-full ${className}`}>
+      <div className="flex flex-col flex-1 min-h-0 [&>*]:flex [&>*]:flex-1 [&>*]:flex-col [&>*]:h-full [&>*]:min-h-0">
+        {children}
+      </div>
+    </HoverCard>
   );
 }
 
@@ -432,16 +488,16 @@ function SegmentedToggle({ label, name, value, options, onChange }) {
 
       <div className="relative flex gap-1 p-1 overflow-hidden border rounded-lg bg-gray-950/80 border-white/10">
         <motion.div
-  className="absolute rounded-md top-1 bottom-1"
-  style={{
-    background: "linear-gradient(135deg, #5b21b6 0%, #7e22ce 45%, #a3195b 100%)",
-  }}
-  animate={{
-    left: `calc(${activeIndex} * (100% / ${options.length}) + 4px)`,
-    width: `calc(100% / ${options.length} - 6px)`
-  }}
-  transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.6 }}
-/>
+          className="absolute rounded-md top-1 bottom-1"
+          style={{
+            background: "linear-gradient(135deg, #5b21b6 0%, #7e22ce 45%, #a3195b 100%)",
+          }}
+          animate={{
+            left: `calc(${activeIndex} * (100% / ${options.length}) + 4px)`,
+            width: `calc(100% / ${options.length} - 6px)`
+          }}
+          transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.6 }}
+        />
 
         {options.map((opt) => (
           <motion.button
@@ -457,6 +513,46 @@ function SegmentedToggle({ label, name, value, options, onChange }) {
           </motion.button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Compact "amount + unit" control used everywhere a duration is
+// collected. One bordered pill, one line, never wraps: a narrow number
+// field on the left and a real unit picker (Days / Months / Years) on
+// the right, separated by a hairline divider instead of two separate
+// input boxes. Whatever unit is picked is stored alongside the raw
+// number and only normalized (see toMonths/toWeeks) when the entry is
+// actually added.
+function DurationInput({ value, unit, onValueChange, onUnitChange, max = 999 }) {
+  return (
+    <div className="flex items-center h-full overflow-hidden border rounded-lg bg-gray-950/80 border-white/10 focus-within:border-purple-500/50 focus-within:shadow-[0_0_0_3px_rgba(168,85,247,0.12)] transition-all duration-200">
+      <input
+        type="number"
+        min={0}
+        max={max}
+        placeholder="0"
+        value={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        aria-label="Duration amount"
+        className="w-11 min-w-0 shrink-0 bg-transparent text-center text-white text-sm py-2.5 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+
+      <div className="self-stretch w-px my-2 bg-white/10 shrink-0" />
+
+      <select
+        value={unit}
+        onChange={(e) => onUnitChange(e.target.value)}
+        aria-label="Duration unit"
+        className="min-w-0 flex-1 bg-transparent text-gray-400 text-xs py-2.5 pl-2 pr-6 focus:outline-none cursor-pointer appearance-none"
+        style={chevronBg}
+      >
+        {DURATION_UNITS.map((u) => (
+          <option key={u.value} value={u.value}>
+            {u.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -554,8 +650,6 @@ function TagPicker({ label, pool, selected, onAdd, onRemove, placeholder }) {
   );
 }
 
-
-
 function FreeTagList({ label, items, onAdd, onRemove, placeholder }) {
   const [draft, setDraft] = useState("");
 
@@ -633,16 +727,20 @@ function FreeTagList({ label, items, onAdd, onRemove, placeholder }) {
 // Projects, Workshops, and Extracurriculars can each collect the fields
 // that actually make sense for them instead of just a bare count.
 //
-// Duration sits on one compact line with the add button — but instead of
-// relying on a placeholder (which gets clipped to nothing in a narrow
-// box), it's labeled with plain fixed text ("Duration (months)") that
-// sits beside a small number input. Plain text doesn't truncate the way
-// placeholders inside bordered inputs do, so this stays both compact
-// (no wasted full-width row for a 1–3 digit number) and unambiguous.
+// Duration now shares the row with the other fields as a fixed-width
+// "auto" column (title | stack | duration+add), using the DurationInput
+// pill above instead of a bare number — so it's a real unit-aware field
+// that still resolves to exactly one line, never wrapping and never
+// left half-finished on its own row.
+//
+// `h-full flex flex-col` + a flex-1 wrapper around the entries list lets
+// this component stretch to fill whatever height its parent card gives
+// it (see StretchCard above), instead of collapsing to its own content
+// height and creating a mismatch against the card next to it.
 function EntryList({
   fields,
-  durationUnit,
   durationKey = "duration",
+  durationUnitKey = "durationUnit",
   hasDescription = false,
   descriptionPlaceholder,
   entries,
@@ -654,9 +752,11 @@ function EntryList({
   renderTitle,
   renderMeta,
 }) {
+  const [showDescription, setShowDescription] = useState(false);
+
   return (
-    <div>
-      <div className="grid grid-cols-1 gap-3 mb-3 sm:grid-cols-2">
+    <div className="flex flex-col h-full">
+      <div className="grid grid-cols-1 gap-3 mb-4 sm:[grid-template-columns:1fr_1fr_auto]">
         {fields.map((f) => (
           <input
             key={f.key}
@@ -669,46 +769,55 @@ function EntryList({
             className={inputClass}
           />
         ))}
-      </div>
 
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-gray-500 text-[10px] font-medium uppercase tracking-widest whitespace-nowrap">
-          Duration <span className="tracking-normal text-gray-600 normal-case">({durationUnit})</span>
-        </span>
+        <div className="flex items-center gap-2 sm:w-[168px]">
+          <DurationInput
+            value={draft[durationKey]}
+            unit={draft[durationUnitKey]}
+            onValueChange={(v) => setDraft((p) => ({ ...p, [durationKey]: v }))}
+            onUnitChange={(u) =>
+              setDraft((p) => ({ ...p, [durationUnitKey]: u }))
+            }
+          />
 
-        <input
-          type="number"
-          placeholder="0"
-          min={0}
-          max={99}
-          value={draft[durationKey]}
-          onChange={(e) =>
-            setDraft((p) => ({ ...p, [durationKey]: e.target.value }))
-          }
-          className="w-20 shrink-0 bg-gray-950/80 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm text-center placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 transition-all duration-200 focus:shadow-[0_0_0_3px_rgba(168,85,247,0.12)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-        />
-
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.92 }}
-          type="button"
-          onClick={onAdd}
-          className="px-3 py-2.5 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
-        >
-          <FaPlus size={12} />
-        </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.92 }}
+            type="button"
+            onClick={onAdd}
+            className="px-3 py-2.5 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
+          >
+            <FaPlus size={12} />
+          </motion.button>
+        </div>
       </div>
 
       {hasDescription && (
-        <textarea
-          rows={2}
-          placeholder={descriptionPlaceholder}
-          value={draft.description}
-          onChange={(e) =>
-            setDraft((p) => ({ ...p, description: e.target.value }))
-          }
-          className={`${inputClass} mb-4 resize-none`}
-        />
+        <div className="mb-4">
+          {!showDescription ? (
+            <button
+              type="button"
+              onClick={() => setShowDescription(true)}
+              className="text-[11px] font-medium text-purple-300 transition-colors hover:text-purple-200"
+            >
+              + Add details (optional)
+            </button>
+          ) : (
+            <motion.textarea
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              transition={{ duration: 0.2, ease: EASE }}
+              rows={2}
+              autoFocus
+              placeholder={descriptionPlaceholder}
+              value={draft.description}
+              onChange={(e) =>
+                setDraft((p) => ({ ...p, description: e.target.value }))
+              }
+              className={`${inputClass} resize-none overflow-hidden`}
+            />
+          )}
+        </div>
       )}
 
       {entries.length > 0 ? (
@@ -752,7 +861,11 @@ function EntryList({
           ))}
         </motion.div>
       ) : (
-        <p className="text-xs text-gray-600">{emptyText}</p>
+        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-white/10 px-4 py-8 min-h-[88px]">
+          <p className="max-w-[220px] text-center text-xs leading-relaxed text-gray-600">
+            {emptyText}
+          </p>
+        </div>
       )}
     </div>
   );
@@ -807,17 +920,20 @@ export default function PredictForm({ setResult, setLoading, loading }) {
     company: "",
     domain: "",
     duration: "",
+    durationUnit: "months",
   });
 
   const [trainingDraft, setTrainingDraft] = useState({
     type: "",
     duration: "",
+    durationUnit: "months",
   });
 
   const [projectDraft, setProjectDraft] = useState({
     title: "",
     stack: "",
     duration: "",
+    durationUnit: "months",
     description: "",
   });
 
@@ -825,6 +941,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
     title: "",
     organizer: "",
     duration: "",
+    durationUnit: "months",
     description: "",
   });
 
@@ -832,6 +949,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
     activity: "",
     role: "",
     duration: "",
+    durationUnit: "months",
     description: "",
   });
 
@@ -872,7 +990,9 @@ export default function PredictForm({ setResult, setLoading, loading }) {
     setInternships((prev) => [
       ...prev,
       {
-        ...internDraft,
+        company: internDraft.company.trim(),
+        domain: internDraft.domain.trim(),
+        duration: toMonths(internDraft.duration, internDraft.durationUnit),
         id: Date.now(),
       },
     ]);
@@ -881,6 +1001,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
       company: "",
       domain: "",
       duration: "",
+      durationUnit: "months",
     });
   };
 
@@ -895,12 +1016,12 @@ export default function PredictForm({ setResult, setLoading, loading }) {
       ...prev,
       {
         type: trainingDraft.type.trim(),
-        duration_weeks: parseInt(trainingDraft.duration) || 0,
+        duration_weeks: toWeeks(trainingDraft.duration, trainingDraft.durationUnit),
         id: Date.now(),
       },
     ]);
 
-    setTrainingDraft({ type: "", duration: "" });
+    setTrainingDraft({ type: "", duration: "", durationUnit: "months" });
   };
 
   const removeTraining = (id) => {
@@ -915,13 +1036,19 @@ export default function PredictForm({ setResult, setLoading, loading }) {
       {
         title: projectDraft.title.trim(),
         stack: projectDraft.stack.trim(),
-        duration: parseInt(projectDraft.duration) || 0,
+        duration: toMonths(projectDraft.duration, projectDraft.durationUnit),
         description: projectDraft.description.trim(),
         id: Date.now(),
       },
     ]);
 
-    setProjectDraft({ title: "", stack: "", duration: "", description: "" });
+    setProjectDraft({
+      title: "",
+      stack: "",
+      duration: "",
+      durationUnit: "months",
+      description: "",
+    });
   };
 
   const removeProject = (id) => {
@@ -936,7 +1063,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
       {
         title: workshopDraft.title.trim(),
         organizer: workshopDraft.organizer.trim(),
-        duration: parseInt(workshopDraft.duration) || 0,
+        duration: toMonths(workshopDraft.duration, workshopDraft.durationUnit),
         description: workshopDraft.description.trim(),
         id: Date.now(),
       },
@@ -946,6 +1073,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
       title: "",
       organizer: "",
       duration: "",
+      durationUnit: "months",
       description: "",
     });
   };
@@ -962,7 +1090,10 @@ export default function PredictForm({ setResult, setLoading, loading }) {
       {
         activity: extracurricularDraft.activity.trim(),
         role: extracurricularDraft.role.trim(),
-        duration: parseInt(extracurricularDraft.duration) || 0,
+        duration: toMonths(
+          extracurricularDraft.duration,
+          extracurricularDraft.durationUnit,
+        ),
         description: extracurricularDraft.description.trim(),
         id: Date.now(),
       },
@@ -972,6 +1103,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
       activity: "",
       role: "",
       duration: "",
+      durationUnit: "months",
       description: "",
     });
   };
@@ -1480,7 +1612,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                 <div className="p-4 md:p-5">
                   <SectionHeader icon={FaBriefcase} title="Internships" />
 
-                  <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-3 mb-4 sm:[grid-template-columns:1.5fr_1fr_auto]">
                     <input
                       type="text"
                       placeholder="Company"
@@ -1491,7 +1623,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                           company: e.target.value,
                         }))
                       }
-                      className={`${inputClass} sm:col-span-2`}
+                      className={inputClass}
                     />
 
                     <input
@@ -1507,20 +1639,16 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                       className={inputClass}
                     />
 
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        placeholder="Months"
-                        min={0}
-                        max={24}
+                    <div className="flex items-center gap-2 sm:w-[168px]">
+                      <DurationInput
                         value={internDraft.duration}
-                        onChange={(e) =>
-                          setInternDraft((p) => ({
-                            ...p,
-                            duration: e.target.value,
-                          }))
+                        unit={internDraft.durationUnit}
+                        onValueChange={(v) =>
+                          setInternDraft((p) => ({ ...p, duration: v }))
                         }
-                        className={inputClass}
+                        onUnitChange={(u) =>
+                          setInternDraft((p) => ({ ...p, durationUnit: u }))
+                        }
                       />
 
                       <motion.button
@@ -1528,7 +1656,7 @@ export default function PredictForm({ setResult, setLoading, loading }) {
                         whileTap={{ scale: 0.92 }}
                         type="button"
                         onClick={addInternship}
-                        className="px-3 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
+                        className="px-3 py-2.5 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
                       >
                         <FaPlus size={12} />
                       </motion.button>
@@ -1586,325 +1714,347 @@ export default function PredictForm({ setResult, setLoading, loading }) {
             </HoverCard>
           </motion.div>
 
-          {/* 05 Other experience (left) + Placement training & Personal
-              info stacked (right) — the right column's combined height
-              now naturally matches the left column instead of stretching
-              a near-empty Placement Training card to match it. */}
+          {/* 05 Projects + Placement training — matched pair.
+              StretchCard forces both cards in the row to the same real
+              height (CSS Grid already sizes the row to its tallest cell;
+              StretchCard pushes that height through GlowCard's own root
+              from the outside via flex, so the shorter card's border
+              ends on the same line as its neighbor instead of trailing
+              off early). Each card's inner content is a flex column so
+              the header stays pinned to the top and the body fills the
+              rest. */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="grid items-start gap-4 mb-4 md:grid-cols-2"
+            className="grid items-stretch gap-4 mb-4 md:grid-cols-2"
           >
-            <HoverCard>
+            <StretchCard>
               <GlowCard>
-                <div className="p-4 md:p-5">
+                <div className="flex flex-col h-full min-h-0 p-4 md:p-5">
+                  <SectionHeader icon={FaCode} title="Projects" />
+                  <div className="flex-1 min-h-0">
+                    <EntryList
+                      fields={[
+                        { key: "title", placeholder: "Project title" },
+                        { key: "stack", placeholder: "Tech stack (e.g. React)" },
+                      ]}
+                      hasDescription
+                      descriptionPlaceholder="What did you build, and what was your role? (optional)"
+                      entries={projectEntries}
+                      draft={projectDraft}
+                      setDraft={setProjectDraft}
+                      onAdd={addProject}
+                      onRemove={removeProject}
+                      emptyText="No projects added yet — add each one, however small."
+                      renderTitle={(e) => e.title}
+                      renderMeta={(e) =>
+                        [e.stack, `${e.duration || 0} mo`]
+                          .filter(Boolean)
+                          .join(" · ")
+                      }
+                    />
+                  </div>
+                </div>
+              </GlowCard>
+            </StretchCard>
+
+            <StretchCard>
+              <GlowCard>
+                <div className="flex flex-col h-full min-h-0 p-4 md:p-5">
                   <SectionHeader
-                    icon={FaCertificate}
-                    title="Other experience"
+                    icon={FaBriefcase}
+                    title="Placement training"
                   />
 
-                  <div className="space-y-6">
+                  <SegmentedToggle
+                    label="Placement training"
+                    name="placement_training"
+                    value={form.placement_training}
+                    options={["Yes", "No"]}
+                    onChange={handleChange}
+                  />
+
+                  <AnimatePresence initial={false}>
+                    {form.placement_training === "Yes" && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.25, ease: EASE }}
+                        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+                      >
+                        <div className="flex flex-col flex-1 min-h-0 pt-5 mt-5 border-t border-white/5">
+                          <label className={labelClass}>
+                            Training programs completed
+                          </label>
+
+                          <datalist id="training-type-options">
+                            {TRAINING_TYPES.map((t) => (
+                              <option key={t} value={t} />
+                            ))}
+                          </datalist>
+
+                          <div className="grid grid-cols-1 gap-3 mb-4 sm:[grid-template-columns:1fr_auto]">
+                            <input
+                              type="text"
+                              list="training-type-options"
+                              placeholder="Type e.g. Mock Interviews"
+                              value={trainingDraft.type}
+                              onChange={(e) =>
+                                setTrainingDraft((p) => ({
+                                  ...p,
+                                  type: e.target.value,
+                                }))
+                              }
+                              className={inputClass}
+                            />
+
+                            <div className="flex items-center gap-2 sm:w-[168px]">
+                              <DurationInput
+                                value={trainingDraft.duration}
+                                unit={trainingDraft.durationUnit}
+                                max={52}
+                                onValueChange={(v) =>
+                                  setTrainingDraft((p) => ({
+                                    ...p,
+                                    duration: v,
+                                  }))
+                                }
+                                onUnitChange={(u) =>
+                                  setTrainingDraft((p) => ({
+                                    ...p,
+                                    durationUnit: u,
+                                  }))
+                                }
+                              />
+
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.92 }}
+                                type="button"
+                                onClick={addTraining}
+                                className="px-3 py-2.5 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
+                              >
+                                <FaPlus size={12} />
+                              </motion.button>
+                            </div>
+                          </div>
+
+                          {trainings.length > 0 ? (
+                            <motion.div
+                              initial="hidden"
+                              animate="visible"
+                              variants={stagger(0.05)}
+                              className="space-y-2"
+                            >
+                              {trainings.map((t) => (
+                                <motion.div
+                                  key={t.id}
+                                  variants={fadeUp}
+                                  whileHover={{ x: 3 }}
+                                  transition={{ duration: 0.2, ease: EASE }}
+                                  className="flex items-center justify-between bg-gray-950/80 border border-white/10 rounded-lg px-4 py-2.5 hover:border-purple-500/30 transition-colors"
+                                >
+                                  <div className="text-sm text-gray-200">
+                                    <span className="font-semibold">
+                                      {t.type}
+                                    </span>
+                                    <span className="text-gray-500">
+                                      {" "}
+                                      · {t.duration_weeks} wk
+                                      {t.duration_weeks === 1 ? "" : "s"}
+                                    </span>
+                                  </div>
+
+                                  <motion.button
+                                    whileTap={{ scale: 0.85 }}
+                                    type="button"
+                                    onClick={() => removeTraining(t.id)}
+                                    className="text-gray-500 transition-colors hover:text-red-400"
+                                  >
+                                    <FaTimes size={12} />
+                                  </motion.button>
+                                </motion.div>
+                              ))}
+                            </motion.div>
+                          ) : (
+                            <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-white/10 px-4 py-8 min-h-[88px]">
+                              <p className="max-w-[220px] text-center text-xs leading-relaxed text-gray-600">
+                                No trainings added yet — add each program
+                                separately so its own duration counts.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </GlowCard>
+            </StretchCard>
+          </motion.div>
+
+          {/* 06 Workshops & courses + Personal info — same idea, second
+              matched pair. */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="grid items-stretch gap-4 mb-4 md:grid-cols-2"
+          >
+            <StretchCard>
+              <GlowCard>
+                <div className="flex flex-col h-full min-h-0 p-4 md:p-5">
+                  <SectionHeader icon={FaCertificate} title="Workshops & courses" />
+                  <div className="flex-1 min-h-0">
+                    <EntryList
+                      fields={[
+                        { key: "title", placeholder: "Workshop / course" },
+                        { key: "organizer", placeholder: "Organizer" },
+                      ]}
+                      hasDescription
+                      descriptionPlaceholder="What did it cover? (optional)"
+                      entries={workshopEntries}
+                      draft={workshopDraft}
+                      setDraft={setWorkshopDraft}
+                      onAdd={addWorkshop}
+                      onRemove={removeWorkshop}
+                      emptyText="No workshops or courses added yet."
+                      renderTitle={(e) => e.title}
+                      renderMeta={(e) =>
+                        [e.organizer, `${e.duration || 0} mo`]
+                          .filter(Boolean)
+                          .join(" · ")
+                      }
+                    />
+                  </div>
+                </div>
+              </GlowCard>
+            </StretchCard>
+
+            <StretchCard>
+              <GlowCard>
+                <div className="flex flex-col h-full min-h-0 p-4 md:p-5">
+                  <SectionHeader icon={FaUserAlt} title="Personal info" />
+
+                  <div className="flex flex-col justify-between flex-1 min-h-0 space-y-5">
+                    <SegmentedToggle
+                      label="Gender"
+                      name="gender"
+                      value={form.gender}
+                      options={["Male", "Female", "Other"]}
+                      onChange={handleChange}
+                    />
+
                     <div>
-                      <label className={labelClass}>Projects</label>
-                      <EntryList
-                        fields={[
-                          { key: "title", placeholder: "Project title" },
-                          { key: "stack", placeholder: "Tech stack (e.g. React)" },
-                        ]}
-                        durationUnit="months"
-                        hasDescription
-                        descriptionPlaceholder="What did you build, and what was your role? (optional)"
-                        entries={projectEntries}
-                        draft={projectDraft}
-                        setDraft={setProjectDraft}
-                        onAdd={addProject}
-                        onRemove={removeProject}
-                        emptyText="No projects added yet — add each one, however small."
-                        renderTitle={(e) => e.title}
-                        renderMeta={(e) =>
-                          [e.stack, `${e.duration || 0} mo`]
-                            .filter(Boolean)
-                            .join(" · ")
+                      <label className={labelClass}>
+                        Preferred role / domain
+                      </label>
+
+                      {/* A closed dropdown, not free text — this is a
+                          real model category now (PreferredRoleCategory),
+                          so it has to be one of exactly the categories
+                          CatBoost was trained on. */}
+                      <select
+                        value={form.preferredRole}
+                        onChange={(e) =>
+                          handleChange("preferredRole", e.target.value)
                         }
+                        className={selectClass}
+                      >
+                        {PREFERRED_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                      <SegmentedToggle
+                        label="Willing to relocate"
+                        name="relocate"
+                        value={form.relocate}
+                        options={RELOCATE_OPTIONS}
+                        onChange={handleChange}
+                      />
+
+                      <NumberStepper
+                        label="Expected CTC (LPA)"
+                        name="expectedCTC"
+                        value={form.expectedCTC}
+                        onChange={handleChange}
+                        min={0}
+                        max={100}
+                        step={0.5}
                       />
                     </div>
 
-                    <div className="pt-6 border-t border-white/5">
+                    <div>
                       <label className={labelClass}>
-                        Workshops &amp; courses
+                        Portfolio / LinkedIn link
                       </label>
-                      <EntryList
-                        fields={[
-                          { key: "title", placeholder: "Workshop / course" },
-                          { key: "organizer", placeholder: "Organizer" },
-                        ]}
-                        durationUnit="days"
-                        hasDescription
-                        descriptionPlaceholder="What did it cover? (optional)"
-                        entries={workshopEntries}
-                        draft={workshopDraft}
-                        setDraft={setWorkshopDraft}
-                        onAdd={addWorkshop}
-                        onRemove={removeWorkshop}
-                        emptyText="No workshops or courses added yet."
-                        renderTitle={(e) => e.title}
-                        renderMeta={(e) =>
-                          [
-                            e.organizer,
-                            `${e.duration || 0} day${e.duration === 1 ? "" : "s"}`,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")
+                      <input
+                        type="url"
+                        placeholder="https://linkedin.com/in/..."
+                        value={form.portfolioLink}
+                        onChange={(e) =>
+                          handleChange("portfolioLink", e.target.value)
                         }
+                        className={inputClass}
                       />
-                    </div>
-
-                    <div className="pt-6 border-t border-white/5">
-                      <label className={labelClass}>
-                        Extracurricular activities
-                      </label>
-                      <EntryList
-                        fields={[
-                          { key: "activity", placeholder: "Activity (e.g. Club)" },
-                          { key: "role", placeholder: "Role (e.g. Lead)" },
-                        ]}
-                        durationUnit="months"
-                        hasDescription
-                        descriptionPlaceholder="What did you do there? (optional)"
-                        entries={extracurricularEntries}
-                        draft={extracurricularDraft}
-                        setDraft={setExtracurricularDraft}
-                        onAdd={addExtracurricular}
-                        onRemove={removeExtracurricular}
-                        emptyText="No extracurriculars added yet — clubs, sports, fests, volunteering all count."
-                        renderTitle={(e) => e.activity}
-                        renderMeta={(e) =>
-                          [e.role, `${e.duration || 0} mo`]
-                            .filter(Boolean)
-                            .join(" · ")
-                        }
-                      />
+                      <p className="mt-1.5 text-[11px] text-gray-600">
+                        Having a link on file counts as having a
+                        portfolio in the model's eyes — leave it blank
+                        if you don't have one yet.
+                      </p>
                     </div>
                   </div>
                 </div>
               </GlowCard>
+            </StretchCard>
+          </motion.div>
+
+          {/* 07 Extracurricular activities — nothing left to pair it
+              against, so it gets a full-width row on its own instead of
+              being crammed under Projects/Workshops in a single card. */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="mb-4"
+          >
+            <HoverCard>
+              <GlowCard>
+                <div className="p-4 md:p-5">
+                  <SectionHeader icon={FaUsers} title="Extracurricular activities" />
+                  <EntryList
+                    fields={[
+                      { key: "activity", placeholder: "Activity (e.g. Club)" },
+                      { key: "role", placeholder: "Role (e.g. Lead)" },
+                    ]}
+                    hasDescription
+                    descriptionPlaceholder="What did you do there? (optional)"
+                    entries={extracurricularEntries}
+                    draft={extracurricularDraft}
+                    setDraft={setExtracurricularDraft}
+                    onAdd={addExtracurricular}
+                    onRemove={removeExtracurricular}
+                    emptyText="No extracurriculars added yet — clubs, sports, fests, volunteering all count."
+                    renderTitle={(e) => e.activity}
+                    renderMeta={(e) =>
+                      [e.role, `${e.duration || 0} mo`]
+                        .filter(Boolean)
+                        .join(" · ")
+                    }
+                  />
+                </div>
+              </GlowCard>
             </HoverCard>
-
-            <div className="flex flex-col gap-4">
-              <HoverCard>
-                <GlowCard>
-                  <div className="p-4 md:p-5">
-                    <SectionHeader
-                      icon={FaBriefcase}
-                      title="Placement training"
-                    />
-
-                    <SegmentedToggle
-                      label="Placement training"
-                      name="placement_training"
-                      value={form.placement_training}
-                      options={["Yes", "No"]}
-                      onChange={handleChange}
-                    />
-
-                    <AnimatePresence initial={false}>
-                      {form.placement_training === "Yes" && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.25, ease: EASE }}
-                          className="overflow-hidden"
-                        >
-                          <div className="pt-5 mt-5 border-t border-white/5">
-                            <label className={labelClass}>
-                              Training programs completed
-                            </label>
-
-                            <datalist id="training-type-options">
-                              {TRAINING_TYPES.map((t) => (
-                                <option key={t} value={t} />
-                              ))}
-                            </datalist>
-
-                            <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-3">
-                              <input
-                                type="text"
-                                list="training-type-options"
-                                placeholder="Type e.g. Mock Interviews"
-                                value={trainingDraft.type}
-                                onChange={(e) =>
-                                  setTrainingDraft((p) => ({
-                                    ...p,
-                                    type: e.target.value,
-                                  }))
-                                }
-                                className={`${inputClass} sm:col-span-2`}
-                              />
-
-                              <div className="flex gap-2">
-                                <input
-                                  type="number"
-                                  placeholder="Weeks"
-                                  min={0}
-                                  max={52}
-                                  value={trainingDraft.duration}
-                                  onChange={(e) =>
-                                    setTrainingDraft((p) => ({
-                                      ...p,
-                                      duration: e.target.value,
-                                    }))
-                                  }
-                                  className={inputClass}
-                                />
-
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.92 }}
-                                  type="button"
-                                  onClick={addTraining}
-                                  className="px-3 text-purple-200 transition-colors border rounded-lg shrink-0 bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25"
-                                >
-                                  <FaPlus size={12} />
-                                </motion.button>
-                              </div>
-                            </div>
-
-                            {trainings.length > 0 ? (
-                              <motion.div
-                                initial="hidden"
-                                animate="visible"
-                                variants={stagger(0.05)}
-                                className="space-y-2"
-                              >
-                                {trainings.map((t) => (
-                                  <motion.div
-                                    key={t.id}
-                                    variants={fadeUp}
-                                    whileHover={{ x: 3 }}
-                                    transition={{ duration: 0.2, ease: EASE }}
-                                    className="flex items-center justify-between bg-gray-950/80 border border-white/10 rounded-lg px-4 py-2.5 hover:border-purple-500/30 transition-colors"
-                                  >
-                                    <div className="text-sm text-gray-200">
-                                      <span className="font-semibold">
-                                        {t.type}
-                                      </span>
-                                      <span className="text-gray-500">
-                                        {" "}
-                                        · {t.duration_weeks} wk
-                                        {t.duration_weeks === 1 ? "" : "s"}
-                                      </span>
-                                    </div>
-
-                                    <motion.button
-                                      whileTap={{ scale: 0.85 }}
-                                      type="button"
-                                      onClick={() => removeTraining(t.id)}
-                                      className="text-gray-500 transition-colors hover:text-red-400"
-                                    >
-                                      <FaTimes size={12} />
-                                    </motion.button>
-                                  </motion.div>
-                                ))}
-                              </motion.div>
-                            ) : (
-                              <p className="text-xs text-gray-600">
-                                No trainings added yet — add each program
-                                separately so its own duration counts.
-                              </p>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </GlowCard>
-              </HoverCard>
-
-              <HoverCard>
-                <GlowCard>
-                  <div className="p-4 md:p-5">
-                    <SectionHeader icon={FaUserAlt} title="Personal info" />
-
-                    <div className="space-y-5">
-                      <SegmentedToggle
-                        label="Gender"
-                        name="gender"
-                        value={form.gender}
-                        options={["Male", "Female", "Other"]}
-                        onChange={handleChange}
-                      />
-
-                      <div>
-                        <label className={labelClass}>
-                          Preferred role / domain
-                        </label>
-
-                        {/* A closed dropdown, not free text — this is a
-                            real model category now (PreferredRoleCategory),
-                            so it has to be one of exactly the categories
-                            CatBoost was trained on. */}
-                        <select
-                          value={form.preferredRole}
-                          onChange={(e) =>
-                            handleChange("preferredRole", e.target.value)
-                          }
-                          className={selectClass}
-                        >
-                          {PREFERRED_ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                        <SegmentedToggle
-                          label="Willing to relocate"
-                          name="relocate"
-                          value={form.relocate}
-                          options={RELOCATE_OPTIONS}
-                          onChange={handleChange}
-                        />
-
-                        <NumberStepper
-                          label="Expected CTC (LPA)"
-                          name="expectedCTC"
-                          value={form.expectedCTC}
-                          onChange={handleChange}
-                          min={0}
-                          max={100}
-                          step={0.5}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>
-                          Portfolio / LinkedIn link
-                        </label>
-                        <input
-                          type="url"
-                          placeholder="https://linkedin.com/in/..."
-                          value={form.portfolioLink}
-                          onChange={(e) =>
-                            handleChange("portfolioLink", e.target.value)
-                          }
-                          className={inputClass}
-                        />
-                        <p className="mt-1.5 text-[11px] text-gray-600">
-                          Having a link on file counts as having a
-                          portfolio in the model's eyes — leave it blank
-                          if you don't have one yet.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </GlowCard>
-              </HoverCard>
-            </div>
           </motion.div>
 
           {/* Predict button — restrained premium CTA, echoes the app's accent */}
@@ -1915,59 +2065,59 @@ export default function PredictForm({ setResult, setLoading, loading }) {
             transition={{ duration: 0.5, delay: 0.1 }}
           >
             <motion.button
-  whileHover={{ y: -2 }}
-  whileTap={{ scale: 0.985, y: 0 }}
-  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-  onClick={handleSubmit}
-  disabled={loading}
-  className="group relative w-full overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl flex items-center justify-center gap-2.5 isolate"
->
-  {/* Deep, rich violet-to-pink base — still solid, not washed out */}
-  <div
-    className="absolute inset-0 rounded-xl"
-    style={{
-      background: "linear-gradient(135deg, #5b21b6 0%, #7e22ce 45%, #a3195b 100%)",
-    }}
-  />
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.985, y: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              onClick={handleSubmit}
+              disabled={loading}
+              className="group relative w-full overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl flex items-center justify-center gap-2.5 isolate"
+            >
+              {/* Deep, rich violet-to-pink base — still solid, not washed out */}
+              <div
+                className="absolute inset-0 rounded-xl"
+                style={{
+                  background: "linear-gradient(135deg, #5b21b6 0%, #7e22ce 45%, #a3195b 100%)",
+                }}
+              />
 
-  {/* Fine top-light for glass depth */}
-  <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/[0.10] via-transparent to-black/20 pointer-events-none" />
+              {/* Fine top-light for glass depth */}
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/[0.10] via-transparent to-black/20 pointer-events-none" />
 
-  {/* Hairline border + soft glow */}
-  <div
-    className="absolute inset-0 rounded-xl pointer-events-none transition-all duration-300 group-hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_28px_rgba(168,85,247,0.45)]"
-    style={{
-      border: "1px solid rgba(255,255,255,0.14)",
-      boxShadow:
-        "inset 0 1px 0 rgba(255,255,255,0.10), 0 0 20px rgba(126,34,206,0.35)",
-    }}
-  />
+              {/* Hairline border + soft glow */}
+              <div
+                className="absolute inset-0 rounded-xl pointer-events-none transition-all duration-300 group-hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_28px_rgba(168,85,247,0.45)]"
+                style={{
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.10), 0 0 20px rgba(126,34,206,0.35)",
+                }}
+              />
 
-  <span className="relative z-10 flex items-center justify-center gap-2.5">
-    {loading ? (
-      <>
-        <FaSpinner className="animate-spin text-[15px]" />
-        <span className="font-medium text-[15px] tracking-wide text-white/90">
-          Analyzing your profile
-        </span>
-      </>
-    ) : (
-      <>
-        <IoMdAnalytics className="text-[17px] text-white/90" />
-        <span className="font-semibold text-[15px] tracking-wide">
-          Predict my placement
-        </span>
-        <motion.span
-          className="text-white/60 text-[15px]"
-          animate={{ x: [0, 3, 0] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-        >
-          →
-        </motion.span>
-      </>
-    )}
-  </span>
-</motion.button>
+              <span className="relative z-10 flex items-center justify-center gap-2.5">
+                {loading ? (
+                  <>
+                    <FaSpinner className="animate-spin text-[15px]" />
+                    <span className="font-medium text-[15px] tracking-wide text-white/90">
+                      Analyzing your profile
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <IoMdAnalytics className="text-[17px] text-white/90" />
+                    <span className="font-semibold text-[15px] tracking-wide">
+                      Predict my placement
+                    </span>
+                    <motion.span
+                      className="text-white/60 text-[15px]"
+                      animate={{ x: [0, 3, 0] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                    >
+                      →
+                    </motion.span>
+                  </>
+                )}
+              </span>
+            </motion.button>
           </motion.div>
         </div>
       </div>

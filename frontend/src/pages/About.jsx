@@ -827,7 +827,7 @@ export default function About() {
                     <RadialGauge value={productionAccuracy} pulse />
                   </div>
                   <div className="flex-1 min-w-0 border-t sm:border-t-0 sm:border-l border-white/10">
-                    <div className="grid grid-cols-2 p-5 gap-x-8 gap-y-5 sm:grid-cols-4 sm:p-6">
+                    <div className="grid grid-cols-2 p-5 mt-12 ml-3 gap-x-8 gap-y-5 sm:grid-cols-4 sm:p-6">
                       {quickStats.map((s) => (
                         <motion.div
                           key={s.label}
