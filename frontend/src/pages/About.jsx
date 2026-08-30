@@ -111,7 +111,7 @@ const contributors = [
     ],
     github: "https://github.com/Adityabt",
     linkedin: "https://linkedin.com/in/adityabt",
-    email: "mailto:aditya.thakur@example.com",
+    email: "mailto:adityabt24@gmail.com",
   },
   {
     name: "Jiya",
@@ -122,8 +122,8 @@ const contributors = [
       "Refined the navigation and hero experience, deployed the frontend to Vercel",
     ],
     github: "https://github.com/jiyagithub",
-    linkedin: "https://linkedin.com/in/jiya-dev",
-    email: "mailto:jiya@example.com",
+    linkedin: "https://www.linkedin.com/in/jiya0106/",
+    email: "mailto:jiya.ebox@gmail.com",
   },
 ];
 
